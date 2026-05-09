@@ -1,3 +1,4 @@
+using System.IO;
 using UnityEngine;
 
 public class MainRender2 : MonoBehaviour
@@ -32,6 +33,10 @@ public class MainRender2 : MonoBehaviour
     public ComputeShader fieldCS;
     public Texture2D DeepStarMap;
     RenderTexture target;
+    public float RedShiftMul;
+    public float Rout;
+    public float Sigma_zero;
+    public bool RenderDisk;
 
     void Start()
     {
@@ -50,6 +55,7 @@ public class MainRender2 : MonoBehaviour
             target.enableRandomWrite = true;
             target.filterMode = FilterMode.Point;
             target.Create();
+            Debug.Log("Texture created: " + target.width + "x" + target.height);
         }
 
         int kernel = fieldCS.FindKernel("CSMain");
@@ -75,6 +81,10 @@ public class MainRender2 : MonoBehaviour
         fieldCS.SetFloat("Rin", CalcRisco());
         fieldCS.SetTexture(kernel, "Starmap", DeepStarMap);
         fieldCS.SetFloat("BackgroundBrightness", BackgroundBrightness);
+        fieldCS.SetFloat("RedShiftMul", RedShiftMul);
+        fieldCS.SetFloat("Rout", Rout);
+        fieldCS.SetFloat("Sigma_zero", Sigma_zero);
+        fieldCS.SetBool("RenderDisc", RenderDisk);
         fieldCS.Dispatch(
             kernel,
             Mathf.CeilToInt(MonitorSize.x / 8f),
@@ -82,6 +92,10 @@ public class MainRender2 : MonoBehaviour
             1
         );
         GetComponent<Renderer>().material.mainTexture = target;
+        Debug.Log("MonitorSize is: " + MonitorSize.x + "x" + MonitorSize.y);
+        Debug.Log("Target is null: " + (target == null));
+        if (target != null)
+            Debug.Log("Existing target size: " + target.width + "x" + target.height);
     }
 
     private void Update()
@@ -95,6 +109,14 @@ public class MainRender2 : MonoBehaviour
             localTetradAtCam = rotateLocalTetrad(localTetradAtCam, CameraRotation);
             Dispatch();
             Debug.Log("Finished");
+        }
+        if (Input.GetKeyDown(KeyCode.S))
+        {
+            Debug.Log("Saving texture...");
+            int name = 1;
+            for (; File.Exists(Application.dataPath + "/ImageExport/RenderedImage" + name + ".png"); name++) ; // find the first available file name
+            SaveRenderTextureToPNG(target, Application.dataPath + "/ImageExport/RenderedImage" + name + ".png"); // save the texture to a PNG file
+            Debug.Log("Texture saved to: " + Application.dataPath + "/ImageExport/RenderedImage" + name + ".png");
         }
     }
 
@@ -234,5 +256,53 @@ public class MainRender2 : MonoBehaviour
         float Z2 = Mathf.Sqrt(Mathf.Abs(3 * chi * chi + Z1 * Z1));
         float Risco = M * (3 + Z2 - Mathf.Sqrt(Mathf.Abs((3 - Z1) * (3 + Z1 + 2 * Z2))));
         return Risco;
+    }
+
+    public static void SaveRenderTextureToPNG(RenderTexture rt, string path)
+    {
+        RenderTexture previous = RenderTexture.active;
+
+        try
+        {
+            RenderTexture.active = rt;
+
+            Texture2D tex = new Texture2D(
+                rt.width,
+                rt.height,
+                TextureFormat.RGBA32,
+                false
+            );
+
+            tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+            tex.Apply();
+
+            RotateTexture180(tex);
+
+            byte[] png = tex.EncodeToPNG();
+
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, png);
+
+            Object.Destroy(tex);
+        }
+        finally
+        {
+            RenderTexture.active = previous;
+        }
+    }
+
+    static void RotateTexture180(Texture2D tex)
+    {
+        Color32[] pixels = tex.GetPixels32();
+
+        int last = pixels.Length - 1;
+
+        for (int i = 0; i < pixels.Length / 2; i++)
+        {
+            (pixels[i], pixels[last - i]) = (pixels[last - i], pixels[i]);
+        }
+
+        tex.SetPixels32(pixels);
+        tex.Apply();
     }
 }
