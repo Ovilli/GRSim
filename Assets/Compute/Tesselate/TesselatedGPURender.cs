@@ -1,7 +1,8 @@
 using System.IO;
 using UnityEngine;
+using UnityEngine.UIElements;
 
-public class MainRender2 : MonoBehaviour
+public class TesselatedGPURender : MonoBehaviour
 {
     Matrix4x4 MetricTensor;
     Matrix4x4 diag;
@@ -32,15 +33,25 @@ public class MainRender2 : MonoBehaviour
     public GameObject TargetPlane;
     public ComputeShader fieldCS;
     public Texture2D DeepStarMap;
-    RenderTexture target;
+    Texture2D resultTexture;
     public float RedShiftMul;
     public float Rout;
     public float Sigma_zero;
     public bool RenderDisk;
 
+    public int tileSize = 100;
+    int CurrectTileSizeX = 0;
+    int CurrectTileSizeY = 0;
+    int OffsetX = 0;
+    int OffsetY = 0;
+
+    bool isRendering = false;
+    int currentTile = 0;
+    int totalPixels = 0;
+    int renderedPixels = 0;
+
     float T_start;
     float T_end;
-    bool Timer;
 
     void Start()
     {
@@ -48,23 +59,19 @@ public class MainRender2 : MonoBehaviour
         diag[0, 0] = -1;
         MetricTensor = Matrix4x4.identity;
         Debug.Log(SystemInfo.graphicsDeviceType);
+        totalPixels = MonitorSize.x * MonitorSize.y;
     }
 
     void Dispatch()
     {
-    
-        if (target == null)
-        {
-            target = new RenderTexture(MonitorSize.x, MonitorSize.y, 0);
-            target.enableRandomWrite = true;
-            target.filterMode = FilterMode.Point;
-            target.Create();
-            Debug.Log("Texture created: " + target.width + "x" + target.height);
-        }
+        var tile = new RenderTexture(CurrectTileSizeX, CurrectTileSizeY, 0);
+        tile.enableRandomWrite = true;
+        tile.filterMode = FilterMode.Point;
+        tile.Create();
 
         int kernel = fieldCS.FindKernel("CSMain");
 
-        fieldCS.SetTexture(kernel, "Result", target);
+        fieldCS.SetTexture(kernel, "Result", tile);
         fieldCS.SetVector("CameraPosition", CameraPosition);
         fieldCS.SetVector("CameraRotation", CameraRotation);
         fieldCS.SetFloat("FOV", FOV);
@@ -89,46 +96,99 @@ public class MainRender2 : MonoBehaviour
         fieldCS.SetFloat("Rout", Rout);
         fieldCS.SetFloat("Sigma_zero", Sigma_zero);
         fieldCS.SetBool("RenderDisc", RenderDisk);
+        fieldCS.SetInt("OffsetX", OffsetX);
+        fieldCS.SetInt("OffsetY", OffsetY);
         fieldCS.Dispatch(
             kernel,
-            Mathf.CeilToInt(MonitorSize.x / 8f),
-            Mathf.CeilToInt(MonitorSize.y / 8f),
+            Mathf.CeilToInt(CurrectTileSizeX / 8f),
+            Mathf.CeilToInt(CurrectTileSizeY / 8f),
             1
         );
-        GetComponent<Renderer>().material.mainTexture = target;
-        Debug.Log("MonitorSize is: " + MonitorSize.x + "x" + MonitorSize.y);
-        Debug.Log("Target is null: " + (target == null));
-        if (target != null)
-            Debug.Log("Existing target size: " + target.width + "x" + target.height);
+        SetTile(OffsetX, OffsetY, CurrectTileSizeX, CurrectTileSizeY, tile);
+        // Clean up the RenderTexture to free memory, suggested by copilot
+        tile.Release();
+        Object.Destroy(tile);
+    }
+
+    void SetTile(int Ox, int Oy, int tileSizeX, int tileSizeY, RenderTexture tile)
+    {
+        Texture2D tileTexture = ToTexture2D(tile);
+        for (int x = 0; x < tileSizeX; x++)
+        {
+            for (int y = 0; y < tileSizeY; y++)
+            {
+                resultTexture.SetPixel(Ox + x, Oy + y, tileTexture.GetPixel(x, y));
+            }
+        }
+        resultTexture.Apply();
+    }
+
+    public Texture2D ToTexture2D(RenderTexture rTex) // Quelle: Das Internet
+    {
+        Texture2D tex = new Texture2D(rTex.width, rTex.height, TextureFormat.RGBA32, false);
+
+        RenderTexture previous = RenderTexture.active;
+        RenderTexture.active = rTex;
+        tex.ReadPixels(new Rect(0, 0, rTex.width, rTex.height), 0, 0);
+        tex.Apply();
+
+        RenderTexture.active = previous;
+
+        return tex;
     }
 
     private void Update()
     {
-        if (Timer)
-        {
-            T_end = Time.time;
-            Debug.Log("Time taken: " + (T_end - T_start) + " seconds");
-            Timer = false;
-        }
-        if (Input.GetKeyDown(KeyCode.P))
+        if (Input.GetKeyDown(KeyCode.P) && !isRendering) //start Rendering
         {
             T_start = Time.time;
+            renderedPixels = 0;
+            currentTile = 0;
+            resultTexture = new Texture2D(MonitorSize.x, MonitorSize.y, TextureFormat.RGBA32, false);
+            resultTexture.filterMode = FilterMode.Point;
             Debug.Log("Started");
             CalcMetricTensor(CameraPosition, CalcR(CameraPosition, a), a, M);
             MetricTensorAtCam = MetricTensor;
             localTetradAtCam = localTetrad(CameraPosition);
             localTetradAtCam = rotateLocalTetrad(localTetradAtCam, CameraRotation);
-            Dispatch();
-            Debug.Log("Finished");
-            Timer = true;
+            isRendering = true;
         }
-        if (Input.GetKeyDown(KeyCode.S))
+        if (Input.GetKeyDown(KeyCode.S) && !isRendering) // save texture as png
         {
             Debug.Log("Saving texture...");
             int name = 1;
             for (; File.Exists(Application.dataPath + "/ImageExport/RenderedImage" + name + ".png"); name++) ; // find the first available file name
-            SaveRenderTextureToPNG(target, Application.dataPath + "/ImageExport/RenderedImage" + name + ".png"); // save the texture to a PNG file
+            SaveRenderTextureToPNG(resultTexture, Application.dataPath + "/ImageExport/RenderedImage" + name + ".png"); // save the texture to a PNG file
             Debug.Log("Texture saved to: " + Application.dataPath + "/ImageExport/RenderedImage" + name + ".png");
+        }
+        if (isRendering) 
+        {
+            currentTile++;
+            Debug.Log(currentTile);
+            renderedPixels += CurrectTileSizeX * CurrectTileSizeY;
+            Debug.Log("Progress: " + (renderedPixels / (float)totalPixels * 100f) + "%");
+            Debug.Log("Rendered pixels: " + renderedPixels + " / " + totalPixels);
+            CurrectTileSizeX = Mathf.Min(tileSize, MonitorSize.x - OffsetX); // adjust tile size for edge cases
+            CurrectTileSizeY = Mathf.Min(tileSize, MonitorSize.y - OffsetY);
+            Dispatch();
+            if (OffsetX + CurrectTileSizeX < MonitorSize.x)
+                OffsetX += tileSize;
+            else
+            {
+                OffsetX = 0;
+                if (OffsetY + CurrectTileSizeY < MonitorSize.y)
+                    OffsetY += tileSize;
+                else
+                {
+                    //finished
+                    OffsetY = 0;
+                    isRendering = false;
+                    Debug.Log("Finished");
+                    T_end = Time.time;
+                    Debug.Log("Time taken: " + (T_start - T_end) + "s");
+                }
+            }
+            GetComponent<Renderer>().material.mainTexture = resultTexture;
         }
     }
 
@@ -169,7 +229,7 @@ public class MainRender2 : MonoBehaviour
 
     public Matrix4x4 localTetrad(Vector4 pos)
     {
-        Vector4 u  = new Vector4(1f / Mathf.Sqrt(Mathf.Abs(-MetricTensorAtCam[0, 0])), 0, 0, 0);
+        Vector4 u = new Vector4(1f / Mathf.Sqrt(Mathf.Abs(-MetricTensorAtCam[0, 0])), 0, 0, 0);
         Vector4 v1 = new Vector4(0, 1, 0, 0);
         Vector4 v2 = new Vector4(0, 0, 1, 0);
         Vector4 v3 = new Vector4(0, 0, 0, 1);
@@ -270,22 +330,12 @@ public class MainRender2 : MonoBehaviour
         return Risco;
     }
 
-    public static void SaveRenderTextureToPNG(RenderTexture rt, string path)
+    public static void SaveRenderTextureToPNG(Texture2D tex, string path)
     {
         RenderTexture previous = RenderTexture.active;
 
         try
         {
-            RenderTexture.active = rt;
-
-            Texture2D tex = new Texture2D(
-                rt.width,
-                rt.height,
-                TextureFormat.RGBA32,
-                false
-            );
-
-            tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
             tex.Apply();
 
             RotateTexture180(tex);

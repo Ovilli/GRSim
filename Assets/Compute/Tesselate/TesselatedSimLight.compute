@@ -1,0 +1,530 @@
+﻿#pragma kernel CSMain
+
+
+bool isNaN(float x)
+{
+    return !(x < 0 || x == 0 || x > 0);
+}
+
+Texture2D<float4> Starmap;
+SamplerState sampler_Starmap;
+
+float3 SampleStarmap(float4 k)
+{
+    // k is the ray direction 4-vector; spatial part is k.yzw
+    float3 dir = normalize(float3(k.y, k.z, k.w));
+    float phi = atan2(dir.z, dir.x); // -π to π
+    float theta = acos(clamp(dir.y, -1, 1)); // 0 to π
+    float2 uv = float2(phi / (2.0 * 3.14159265) + 0.5, theta / 3.14159265);
+    return Starmap.SampleLevel(sampler_Starmap, uv, 0).rgb;
+}
+
+float3 OpacityColor(float3 color1, float Opcaity, float3 color2)
+{
+    return color1 * Opcaity + color2 * (1 - Opcaity);
+}
+
+
+RWTexture2D<float4> Result;
+
+static const float4x4 diag = float4x4(-1, 0, 0, 0,
+                                       0, 1, 0, 0,
+                                       0, 0, 1, 0,
+                                       0, 0, 0, 1);
+
+float4 CameraPosition;
+float3 CameraRotation;
+float FOV;
+int2 MonitorSize;
+
+float4x4 MetricTensorAtCam;
+float4x4 localTetradAtCam;
+
+float M;
+float a;
+
+float StepSize;
+float preciseSteps;
+float margin;
+int maxSteps = 400; // very important, so that compiler does not try top unroll the loop
+
+float T_max;
+
+float Rsoi;
+float SuckInMargin;
+float Rin; //R isco always same, so is set from c# script to save time
+
+float h_div_k = 4.799243073e-10; // h / k in m*K, used for Planck function (does not change in geometric units)
+float AccBrightness; // leave at 1 most of the time
+float BackgroundBrightness;
+float RedShiftMul; // leave at 1 most of the time, can be used to exaggerate red shift for artistic effect
+float Rout; // outer radius of accretion disk
+float Sigma_zero;
+
+float4 CurrentColor;
+bool RenderDisk;
+
+int OffsetX;
+int OffsetY;
+
+struct LightRay
+{
+    float4 pos;
+    float4 k;
+};
+
+struct MetricData
+{
+    float4x4 g;
+    float4x4 ginv;
+};
+
+struct DelMetric
+{
+    float4x4 delG0;
+    float4x4 delG1;
+    float4x4 delG2;
+    float4x4 delG3;
+};
+
+float4x4 GetDelG(DelMetric dM, int i)
+{
+    if (i == 0)
+        return dM.delG0;
+    if (i == 1)
+        return dM.delG1;
+    if (i == 2)
+        return dM.delG2;
+    return dM.delG3;
+}
+
+
+float CalcR2(float4 pos, float a)
+{
+    float rho2 = pos.y * pos.y + pos.z * pos.z + pos.w * pos.w;
+    return 0.5 * (rho2 - a * a + sqrt(abs(pow(rho2 - a * a, 2) + 4 * a * a * pos.w * pos.w)));
+}
+float CalcR(float4 pos, float a)
+{
+    return sqrt(abs(CalcR2(pos, a)));
+}
+float4 CalcL(float4 pos, float r, float a)
+{
+    return float4(-1,
+                  (r * pos.y + a * pos.z) / (r * r + a * a),
+                  (r * pos.z - a * pos.y) / (r * r + a * a),
+                  pos.w / r);
+}
+float CalcH(float r, float z, float M, float a)
+{
+    return (M * r * r * r) / (r * r * r * r + a * a * z * z);
+}
+
+float CalcDelH_R(float r, float z, float M, float a)
+{
+    float r2 = r * r;
+    float r3 = r2 * r;
+    float r4 = r2 * r2;
+    float numerator = M * (3 * r2 * (r4 + a * a * z * z) - r3 * (4 * r3));
+    float denominator = pow(r4 + a * a * z * z, 2);
+    return numerator / denominator;
+}
+float CalcDelH_Z(float r, float z, float M, float a)
+{
+    float r4 = r * r * r * r;
+    float numerator = -2 * M * r * r * r * a * a * z;
+    float denominator = pow(r4 + a * a * z * z, 2);
+    return numerator / denominator;
+}
+float4 CalcDelR2(float4 pos, float a)
+{
+    float x = pos.y, y = pos.z, z = pos.w;
+    float a2 = a * a;
+    float rho2 = x * x + y * y + z * z;
+    float delta = pow(rho2 - a2, 2) + 4 * a2 * z * z;
+    float sqrtDelta = sqrt(abs(delta));
+    return float4(0,
+                  0.5 * (2 * x + (2 * (rho2 - a2) * x) / sqrtDelta),
+                  0.5 * (2 * y + (2 * (rho2 - a2) * y) / sqrtDelta),
+                  0.5 * (2 * z + (2 * (rho2 - a2) * z + 4 * a2 * z) / sqrtDelta));
+}
+float4 CalcDelR(float4 pos, float a)
+{
+    float4 delR2 = CalcDelR2(pos, a);
+    float r = sqrt(abs(CalcR2(pos, a)));
+    return float4(0, delR2.y / (2 * r), delR2.z / (2 * r), delR2.w / (2 * r));
+}
+float4x4 CalcDelL(float4 pos, float r, float4 delR, float a)
+{
+    int KroX[4] = { 0, 1, 0, 0 };
+    int KroY[4] = { 0, 0, 1, 0 };
+    int KroZ[4] = { 0, 0, 0, 1 };
+    float4 delLT = float4(0, 0, 0, 0);
+    float4 delLX = float4(0, 0, 0, 0);
+    float4 delLY = float4(0, 0, 0, 0);
+    float4 delLZ = float4(0, 0, 0, 0);
+
+    float r2a2 = r * r + a * a;
+    float FactorX = (pos.y * r2a2 - 2 * r * (r * pos.y + a * pos.z)) / (r2a2 * r2a2);
+    [unroll]
+    for (int dim1 = 1; dim1 < 4; dim1++)
+        delLX[dim1] = (r * KroX[dim1] + a * KroY[dim1]) / r2a2 + FactorX * delR[dim1];
+    float FactorY = (pos.z * r2a2 - 2 * r * (r * pos.z - a * pos.y)) / (r2a2 * r2a2);
+    [unroll]
+    for (int dim2 = 1; dim2 < 4; dim2++)
+        delLY[dim2] = (r * KroY[dim2] - a * KroX[dim2]) / r2a2 + FactorY * delR[dim2];
+    [unroll]
+    for (int dim3 = 1; dim3 < 4; dim3++)
+        delLZ[dim3] = KroZ[dim3] / r - pos.w / (r * r) * delR[dim3];
+
+    return float4x4(delLT, delLX, delLY, delLZ);
+}
+float4 CalcDelH(float4 pos, float r, float M, float a)
+{
+    float delH_R = CalcDelH_R(r, pos.w, M, a);
+    float delH_Z = CalcDelH_Z(r, pos.w, M, a);
+    float4 dr = CalcDelR(pos, a);
+    return float4(0,
+                  delH_R * dr.y,
+                  delH_R * dr.z,
+                  delH_R * dr.w + delH_Z);
+}
+
+float4x4 CalcInverseMetric(float H, float4 L)
+{
+    float4 Lup = float4(-L[0], L[1], L[2], L[3]);
+    float4x4 inv = diag;
+    //[unroll] 
+    for (int mu = 0; mu < 4; mu++)
+    {
+        //[unroll]
+        for (int nu = 0; nu < 4; nu++)
+        {
+            inv[mu][nu] -= 2 * H * Lup[mu] * Lup[nu];
+        }
+    }
+    return inv;
+}
+MetricData CalcMetric(float4 position, float r, float a, float M)
+{
+    float H = CalcH(r, position.w, M, a);
+    float4 l = CalcL(position, r, a);
+    MetricData md;
+    md.g = float4x4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    for (int mu = 0; mu < 4; mu++)
+    {
+        for (int nu = 0; nu < 4; nu++)
+        {
+            md.g[mu][nu] = diag[mu][nu] + 2 * H * l[mu] * l[nu];
+        }
+        
+    }
+    md.ginv = CalcInverseMetric(H, l);
+    return md;
+}
+DelMetric CalcDelMetricTensor(float4 position, float r, float a, float M)
+{
+    float4 L = CalcL(position, r, a);
+    float4 delR = CalcDelR(position, a);
+    float4x4 delL = CalcDelL(position, r, delR, a);
+    float4 delH = CalcDelH(position, r, M, a);
+    float H = CalcH(r, position.w, M, a);
+
+    DelMetric dM;
+    for (int mu = 0; mu < 4; mu++)
+    {
+        for (int nu = 0; nu < 4; nu++)
+        {
+            dM.delG0[mu][nu] = 2 * (delH[0] * L[mu] * L[nu] + H * delL[0][mu] * L[nu] + H * delL[0][nu] * L[mu]);
+            dM.delG1[mu][nu] = 2 * (delH[1] * L[mu] * L[nu] + H * delL[1][mu] * L[nu] + H * delL[1][nu] * L[mu]);
+            dM.delG2[mu][nu] = 2 * (delH[2] * L[mu] * L[nu] + H * delL[2][mu] * L[nu] + H * delL[2][nu] * L[mu]);
+            dM.delG3[mu][nu] = 2 * (delH[3] * L[mu] * L[nu] + H * delL[3][mu] * L[nu] + H * delL[3][nu] * L[mu]);
+        }
+    }
+    return dM;
+}
+
+float4 CalculateAcceleration(float4 pos, float4 k)
+{
+    float r = CalcR(pos, a);
+    MetricData md = CalcMetric(pos, r, a, M);
+    DelMetric dM = CalcDelMetricTensor(pos, r, a, M);
+
+    float4 acc = float4(0, 0, 0, 0);
+    for (int mu = 0; mu < 4; mu++)
+    {
+        float sumMu = 0;
+        for (int alpha = 0; alpha < 4; alpha++)
+        {
+            for (int beta = 0; beta < 4; beta++)
+            {
+                float gamma = 0;
+                for (int nu = 0; nu < 4; nu++)
+                {
+                    float4x4 dGa = GetDelG(dM, alpha);
+                    float4x4 dGb = GetDelG(dM, beta);
+                    float4x4 dGn = GetDelG(dM, nu);
+                    gamma += md.ginv[mu][nu] * (dGa[nu][beta] + dGb[nu][alpha] - dGn[alpha][beta]);
+                }
+                gamma *= 0.5;
+                sumMu -= gamma * k[alpha] * k[beta];
+            }
+        }
+        acc[mu] = sumMu;
+    }
+    return acc;
+}
+
+// ---- RK4 ------------------------------------------------------------------
+
+LightRay StepLight(LightRay Y, float h)
+{
+    // stage 1
+    float4 vel1 = Y.k;
+    float4 acc1 = CalculateAcceleration(Y.pos, Y.k);
+
+    // stage 2
+    float4 pos2 = Y.pos + (h * 0.5) * vel1;
+    float4 k2 = Y.k + (h * 0.5) * acc1;
+    float4 vel2 = k2;
+    float4 acc2 = CalculateAcceleration(pos2, k2);
+
+    // stage 3
+    float4 pos3 = Y.pos + (h * 0.5) * vel2;
+    float4 k3 = Y.k + (h * 0.5) * acc2;
+    float4 vel3 = k3;
+    float4 acc3 = CalculateAcceleration(pos3, k3);
+
+    // stage 4
+    float4 pos4 = Y.pos + h * vel3;
+    float4 k4 = Y.k + h * acc3;
+    float4 vel4 = k4;
+    float4 acc4 = CalculateAcceleration(pos4, k4);
+
+    LightRay result;
+    result.pos = Y.pos + (h / 6.0) * (vel1 + 2 * vel2 + 2 * vel3 + vel4);
+    result.k = Y.k + (h / 6.0) * (acc1 + 2 * acc2 + 2 * acc3 + acc4);
+    return result;
+}
+
+// ---- camera ---------------------------------------------------------------
+
+LightRay instantiateRay(float4 CamPos, float FOV, float Width, float Height,
+                        float2 pos, float4x4 rotatedlocalTetrad)
+{
+    float aspectRatio = Width / Height;
+    float u = ((pos.x + 0.5) / Width - 0.5) * 2;
+    float v = ((pos.y + 0.5) / Height - 0.5) * 2;
+    float alpha = tan(FOV * 0.5) * u * aspectRatio;
+    float beta = tan(FOV * 0.5) * v;
+    float A = sqrt(abs(alpha * alpha + beta * beta + 1));
+    float4 aRay = float4(A, alpha, beta, 1);
+
+    float4 k = float4(0, 0, 0, 0);
+    for (int i = 0; i < 4; i++)
+    {
+        float sum = 0;
+        for (int j = 0; j < 4; j++)
+        {
+            sum += rotatedlocalTetrad[i][j] * aRay[j];
+        }
+        k[i] = sum;
+    }
+    LightRay r;
+    r.pos = CamPos;
+    r.k = k;
+    return r;
+}
+
+// ---- collision tests ------------------------------------------------------
+
+bool HitBlackHole(float4 newPos)
+{
+    return CalcR(newPos, a) <= 2 * M * SuckInMargin;
+}
+
+
+
+float SurfaceDensity(float r) //Surface Density of Novikov Thorne Accretion Disk
+{
+    return pow(r, -0.6) * pow(1 - sqrt(Rin / r), -0.8);
+}
+float alpha(float r) // Approximation of Opacity Scaling of Accretion Disk
+{
+    return 1 - exp(-SurfaceDensity(r) / Sigma_zero);
+
+}
+
+
+float3 phi_hatComponent(float x, float y, float r) //gets the phi component in Kerr-Shild from x and y in cartesian
+{
+    float3 phi_hat = float3(-y, x, 0);
+    phi_hat *= 1 / r;
+    return phi_hat;
+}
+float GravRedShift(float r)
+{
+    float g = sqrt(1 - (2 * M * r) / (r * r + a * a * pow(cos(3.1415926 / 2), 2)));
+    return g;
+}
+float DopplerRedShift(float r, float x, float y, float3 k)
+{
+    float v = sqrt(M / r) * RedShiftMul;
+    float3 phi_hat = phi_hatComponent(x, y, r);
+    float beta_los = v * dot(phi_hat, k) / length(k);
+    float g = sqrt((1 - beta_los) / (1 + beta_los));
+    return g;
+}
+float RedShift(float r, float x, float y, float3 k)
+{
+    float g_grav = GravRedShift(r);
+    float g_dopp = DopplerRedShift(r, x, y, k);
+    return g_grav * g_dopp;
+}
+//simple approximation, assumes the disk is infinitely thin and in the equatorial plane, also then only an approximation
+float DiskTemperature(float r, float Rin)
+{
+    // Novikov-Thorne aka sub edington
+    float f = 1.0 - sqrt(abs(Rin / r)); // = 0 at ISCO
+    return pow(r, -0.75) * pow(f, 0.25); //only realtive temperature
+}
+
+//https://en.wikipedia.org/wiki/Black-body_radiation#Planck's_law_of_black-body_radiation
+float Planck(float wavelength_nm, float T) //little bit different from the usual formula, written by claude, because the usual uses multiple constants of the size of e-34, which wouldnt fit in floats and double is buggy in Direct3D11
+{
+    float wl_m = wavelength_nm * 1e-9;
+    float hc_over_lkT = 0.014388 / (wl_m * T); // hc/k in m·K
+    return 1.0 / (pow(wavelength_nm, 5.0) * (exp(hc_over_lkT) - 1.0));
+}
+// CIE 1931 color matching functions (Gaussian fit by Wyman et al.)
+float3 CIEColorMatch(float wl) //maps wavelength in nm to XYZ color space, not normalized, only for visible spectru
+{
+    float3 xyz;
+    xyz.x = 1.056 * exp(-0.5 * pow((wl - 599.8) / 37.9, 2))
+          + 0.362 * exp(-0.5 * pow((wl - 442.0) / 16.0, 2))
+          - 0.065 * exp(-0.5 * pow((wl - 501.1) / 20.4, 2));
+    xyz.y = 0.821 * exp(-0.5 * pow((wl - 568.8) / 46.9, 2))
+          + 0.286 * exp(-0.5 * pow((wl - 530.9) / 16.3, 2));
+    xyz.z = 1.217 * exp(-0.5 * pow((wl - 437.0) / 11.8, 2))
+          + 0.681 * exp(-0.5 * pow((wl - 459.0) / 26.0, 2));
+    return max(xyz, 0);
+}
+
+float3 XYZtoRGB(float3 xyz) //converts xyz in cie 1931 to rgb both this and the one above written by claude, find some sources some when else...
+{
+    // Standard sRGB matrix, D65 white point
+    float r = 3.2404542 * xyz.x - 1.5371385 * xyz.y - 0.4985314 * xyz.z;
+    float g = -0.9692660 * xyz.x + 1.8760108 * xyz.y + 0.0415560 * xyz.z;
+    float b = 0.0556434 * xyz.x - 0.2040259 * xyz.y + 1.0572252 * xyz.z;
+    return max(float3(r, g, b), 0);
+}
+
+float3 BlackbodyRGB(float T, float x, float y, float3 k)
+{
+    float3 xyz = float3(0, 0, 0);
+    [loop]
+    for (int i = 0; i < 150; i++) //loops over a discrete set of visible frequencys and calulates theire strenght
+    {
+        float wl = 360.0 + i * 2.6; // calculate wavelength
+        float red_shift = RedShift(CalcR(float4(0, x, y, 0), a), x, y, k); //calculate redshift to/from that point
+        xyz += CIEColorMatch(wl) * Planck(wl * red_shift, T); // calculates original frequency without redshift, calculates strenght and adds back 
+    }
+    return max(XYZtoRGB(xyz), 0); //max with 0 to avoid negative colors, which fsr can happen it gaussian fit
+}
+
+float3 AccretionDiskColor(float4 ip, float4 k, float r, float Rin, float Rout, float T_max, float x, float y)
+{
+    float T_rel = DiskTemperature(r, Rin); // relative temperature at radius r, normalized to 1 at ISCO
+    float T_peak_rel = DiskTemperature((49.0 / 36.0) * Rin, Rin); // relative peak temperature, occurs at r = (49/36) * Rin for Novikov-Thorne disk.
+    float T = T_max * T_rel / max(T_peak_rel, 1e-6); // use actual T_max at T_peak_rel to scale relative temperature to absolute temperature, avoid div by 0 just in case
+
+    if (T < 100.0)
+        return float3(0, 0, -1); // too cold to emit visible light, return seethrew
+
+    float3 color = BlackbodyRGB(T, x, y, float3(k.y, k.z, k.w)); // calc color 
+    //this won't work anymore, because the red shift can make the color brighter than the peak temperature color, so need to scale it down to avoid oversaturation, also this is more physically accurate because the disk can be brighter than the peak temperature color due to red shift, but it can't be brighter than the peak temperature color without red shift
+    float3 peak = BlackbodyRGB(T_max, x, y, float3(k.y, k.z, k.w)); // color at peak temperature, used to scale the color so that the brightest point is not oversaturated, avoid div by 0 just in case
+    float scale = max(peak.r, max(peak.g, peak.b));
+    color /= max(scale, 1e-30);
+
+    return color * AccBrightness; // apply overall brightness factor
+}
+float4 HitFlatAccretionDisk(float4 newPos, float4 oldPos, float4 k)
+{
+    if (!RenderDisk)
+        return float4(0, 0, 0, 0);
+    if (newPos.w * oldPos.w >= 0) //test if intersect with equatorial plane
+        return float4(0, 0, 0, 0);
+    float t = oldPos.w / (oldPos.w - newPos.w); //approximate exact intersection point linearly
+    float4 ip = oldPos + t * (newPos - oldPos); //intersection point = ip
+    ip.w = 0;
+
+    float r = CalcR(ip, a);
+    if (r < Rin || r > Rout) // when inside
+        return float4(0, 0, 0, 0);
+    float3 color = AccretionDiskColor(ip, k, r, Rin, Rout, T_max, ip.y, ip.z); //calc color
+    if (color.z == -1)
+        return float4(0, 0, 0, -1); //return all seethrew
+    return float4(color, 1);
+}
+float4 HitSOI(float4 pos)
+{
+    if (CalcR(pos, a) < Rsoi)
+        return float4(0, 0, 0, 0);
+    return float4(min(SampleStarmap(pos), 1).x * BackgroundBrightness, min(SampleStarmap(pos), 1).y * BackgroundBrightness, min(SampleStarmap(pos), 1).z * BackgroundBrightness, 1);
+}
+float4 HitObject(float4 newPos, float4 oldPos, float4 k)
+{
+    [unroll] 
+    for (int mu = 0; mu < 4; mu++)
+    {
+        if (isNaN(newPos[mu]))
+            return float4(1, 0, 1, 1); // magenta = NaN
+    }
+    if (HitBlackHole(newPos))
+        return float4(0, 0, 0, 1); // black
+    float4 disk = HitFlatAccretionDisk(newPos, oldPos, k);
+    if (disk.w == 1)
+        return disk;
+    float4 soi = HitSOI(newPos);
+    if (soi.w == 1)
+        return soi;
+    return float4(0, 0, 0, 0);
+}
+
+// ---- ray loop -------------------------------------------------------------
+
+float4 TraceRay(LightRay start)
+{
+    LightRay nextPos = start;
+    LightRay prevPos = start;
+
+    //[loop] // <-- critical: do NOT unroll the 400-step loop
+    for (int step = 0; step < maxSteps; step++)
+    {
+        prevPos = nextPos;
+        float r = CalcR(nextPos.pos, a);
+        float precision = (r - 2 * M < margin) ? preciseSteps : StepSize;
+
+        nextPos = StepLight(nextPos, precision);
+        float4 Hit = HitObject(nextPos.pos, prevPos.pos, nextPos.k);
+        if (Hit.w != 0)
+            return float4(Hit.rgb, 1);
+    }
+    return float4(0, 0, 1, 1); // ran out of steps -> blue
+}
+
+// ---- kernel ---------------------------------------------------------------
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    if ((int) id.x + OffsetX >= MonitorSize.x || (int) id.y + OffsetY >= MonitorSize.y)
+        return;
+    LightRay ray = instantiateRay(CameraPosition, FOV,
+                                  MonitorSize.x, MonitorSize.y,
+                                  float2(id.x + OffsetX, id.y + OffsetY), localTetradAtCam);
+    float4 color = TraceRay(ray);
+    Result[int2(id.x, id.y)] = float4(min(color.x, 1), min(color.y, 1), min(color.z, 1), 1);
+}
+
