@@ -455,7 +455,7 @@ MonoBehaviour:
   Rout: 70
   Sigma_zero: 0
   RenderDisk: 0
-  tileSize: 100
+  tileSize: 10000
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

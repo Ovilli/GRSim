@@ -1,5 +1,6 @@
 using System.IO;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.UIElements;
 
 public class TesselatedGPURender : MonoBehaviour
@@ -52,6 +53,7 @@ public class TesselatedGPURender : MonoBehaviour
 
     float T_start;
     float T_end;
+    bool finishedRenderingLastFrame = false;
 
     void Start()
     {
@@ -139,19 +141,11 @@ public class TesselatedGPURender : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.P) && !isRendering) //start Rendering
+        if (finishedRenderingLastFrame)
         {
-            T_start = Time.time;
-            renderedPixels = 0;
-            currentTile = 0;
-            resultTexture = new Texture2D(MonitorSize.x, MonitorSize.y, TextureFormat.RGBA32, false);
-            resultTexture.filterMode = FilterMode.Point;
-            Debug.Log("Started");
-            CalcMetricTensor(CameraPosition, CalcR(CameraPosition, a), a, M);
-            MetricTensorAtCam = MetricTensor;
-            localTetradAtCam = localTetrad(CameraPosition);
-            localTetradAtCam = rotateLocalTetrad(localTetradAtCam, CameraRotation);
-            isRendering = true;
+            T_end = Time.time;
+            Debug.Log("Time taken: " + (T_end - T_start) + "s");
+            finishedRenderingLastFrame = false;
         }
         if (Input.GetKeyDown(KeyCode.S) && !isRendering) // save texture as png
         {
@@ -184,11 +178,24 @@ public class TesselatedGPURender : MonoBehaviour
                     OffsetY = 0;
                     isRendering = false;
                     Debug.Log("Finished");
-                    T_end = Time.time;
-                    Debug.Log("Time taken: " + (T_start - T_end) + "s");
+                    finishedRenderingLastFrame = true;
                 }
             }
             GetComponent<Renderer>().material.mainTexture = resultTexture;
+        }
+        if (Input.GetKeyDown(KeyCode.P) && !isRendering) //start Rendering, is last because otherwise time measurement does not work
+        {
+            T_start = Time.time;
+            renderedPixels = 0;
+            currentTile = 0;
+            resultTexture = new Texture2D(MonitorSize.x, MonitorSize.y, TextureFormat.RGBA32, false);
+            resultTexture.filterMode = FilterMode.Point;
+            Debug.Log("Started");
+            CalcMetricTensor(CameraPosition, CalcR(CameraPosition, a), a, M);
+            MetricTensorAtCam = MetricTensor;
+            localTetradAtCam = localTetrad(CameraPosition);
+            localTetradAtCam = rotateLocalTetrad(localTetradAtCam, CameraRotation);
+            isRendering = true;
         }
     }
 
