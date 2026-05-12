@@ -429,7 +429,7 @@ float3 BlackbodyRGB(float T, float x, float y, float3 k)
         float red_shift = RedShift(CalcR(float4(0, x, y, 0), a), x, y, k); //calculate redshift to/from that point
         xyz += CIEColorMatch(wl) * Planck(wl * red_shift, T); // calculates original frequency without redshift, calculates strenght and adds back 
     }
-    return max(XYZtoRGB(xyz), 0); //max with 0 to avoid negative colors, which fsr can happen it gaussian fit
+    return max(XYZtoRGB(xyz), 0); //max with 0 to avoid negative colors, which fsr can happen it gaussian fit, or maybe just messed up somewhere
 }
 
 float3 AccretionDiskColor(float4 ip, float4 k, float r, float Rin, float Rout, float T_max, float x, float y)
@@ -452,25 +452,38 @@ float3 AccretionDiskColor(float4 ip, float4 k, float r, float Rin, float Rout, f
 float4 HitFlatAccretionDisk(float4 newPos, float4 oldPos, float4 k)
 {
     if (!RenderDisk)
+    {
         return float4(0, 0, 0, 0);
+    }
     if (newPos.w * oldPos.w >= 0) //test if intersect with equatorial plane
+    {
         return float4(0, 0, 0, 0);
+    }
+    
     float t = oldPos.w / (oldPos.w - newPos.w); //approximate exact intersection point linearly
     float4 ip = oldPos + t * (newPos - oldPos); //intersection point = ip
     ip.w = 0;
 
     float r = CalcR(ip, a);
     if (r < Rin || r > Rout) // when inside
+    {
         return float4(0, 0, 0, 0);
+    }
+    
     float3 color = AccretionDiskColor(ip, k, r, Rin, Rout, T_max, ip.y, ip.z); //calc color
+    
     if (color.z == -1)
+    {
         return float4(0, 0, 0, -1); //return all seethrew
+    }
     return float4(color, 1);
 }
 float4 HitSOI(float4 pos)
 {
     if (CalcR(pos, a) < Rsoi)
+    {
         return float4(0, 0, 0, 0);
+    }
     return float4(min(SampleStarmap(pos), 1).x * BackgroundBrightness, min(SampleStarmap(pos), 1).y * BackgroundBrightness, min(SampleStarmap(pos), 1).z * BackgroundBrightness, 1);
 }
 float4 HitObject(float4 newPos, float4 oldPos, float4 k)
@@ -481,14 +494,23 @@ float4 HitObject(float4 newPos, float4 oldPos, float4 k)
         if (isNaN(newPos[mu]))
             return float4(1, 0, 1, 1); // magenta = NaN
     }
+    
     if (HitBlackHole(newPos))
+    {
         return float4(0, 0, 0, 1); // black
+    }
+    
     float4 disk = HitFlatAccretionDisk(newPos, oldPos, k);
     if (disk.w == 1)
+    {
         return disk;
+    }
+    
     float4 soi = HitSOI(newPos);
     if (soi.w == 1)
+    {
         return soi;
+    }
     return float4(0, 0, 0, 0);
 }
 
