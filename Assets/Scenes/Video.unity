@@ -131,7 +131,7 @@ GameObject:
   - component: {fileID: 1078926684}
   - component: {fileID: 1078926683}
   - component: {fileID: 1078926682}
-  - component: {fileID: 1078926681}
+  - component: {fileID: 1078926686}
   m_Layer: 0
   m_Name: Plane
   m_TagString: Untagged
@@ -139,41 +139,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1078926681
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1078926680}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ed4d9f0ea73f8f448a0241e95e67f985, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TesselatedGPURender
-  CameraPosition: {x: 0, y: 35, z: -60, w: 10}
-  CameraRotation: {x: 290, y: 270, z: 90}
-  FOV: 1.5
-  MonitorSize: {x: 3840, y: 2160}
-  M: 2
-  a: 0
-  StepSize: 0.2
-  preciseSteps: 0.01
-  Rsoi: 250
-  maxSteps: 10000
-  margin: 0.1
-  SuckInMargin: 1.1
-  T_max: 2000
-  AccBrightness: 1
-  BackgroundBrightness: 64
-  TargetPlane: {fileID: 1078926680}
-  fieldCS: {fileID: 7200000, guid: 42507ae1c1c0af24d89422262e079d3d, type: 3}
-  DeepStarMap: {fileID: 2800000, guid: 0cf94cfc70d094a40b10be3629fbe450, type: 3}
-  RedShiftMul: 1
-  Rout: 70
-  Sigma_zero: 0
-  RenderDisk: 1
-  tileSize: 500
 --- !u!64 &1078926682
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -267,6 +232,46 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1078926686
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1078926680}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c1c24d8decea3764bba3e911582fdb3b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VideoRunner
+  CameraPosition: {x: 0, y: 40, z: 0, w: 0}
+  CameraRotation: {x: 0, y: 255, z: 90}
+  FOV: 1.5
+  MonitorSize: {x: 1920, y: 1080}
+  M: 2
+  a: 1
+  StepSize: 0.2
+  preciseSteps: 0.01
+  Rsoi: 100
+  maxSteps: 10000
+  margin: 0.1
+  SuckInMargin: 1.1
+  T_max: 2000
+  AccBrightness: 1
+  BackgroundBrightness: 64
+  TargetPlane: {fileID: 1078926680}
+  fieldCS: {fileID: 7200000, guid: 42507ae1c1c0af24d89422262e079d3d, type: 3}
+  DeepStarMap: {fileID: 2800000, guid: 0cf94cfc70d094a40b10be3629fbe450, type: 3}
+  RedShiftMul: 1
+  Rout: 70
+  Sigma_zero: 0
+  RenderDisk: 0
+  tileSize: 500
+  isRenderingVideo: 0
+  frame: 0
+  FrameCount: 600
+  frameRate: 60
+  saveFrames: 1
 --- !u!1 &1209598649
 GameObject:
   m_ObjectHideFlags: 0

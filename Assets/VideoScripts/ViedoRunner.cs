@@ -1,7 +1,9 @@
 using System.IO;
+using System.Net.NetworkInformation;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UIElements;
+using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
 
 public class VideoRunner : MonoBehaviour
 {
@@ -46,14 +48,18 @@ public class VideoRunner : MonoBehaviour
     int OffsetX = 0;
     int OffsetY = 0;
 
-    bool isRendering = false;
+    bool isRenderingFrame = false;
     int currentTile = 0;
     int totalPixels = 0;
     int renderedPixels = 0;
 
-    float T_start;
-    float T_end;
-    bool finishedRenderingLastFrame = false;
+    public bool isRenderingVideo = false;
+    bool finishedRenderingFrameLastFrame = false;
+    int videoNumber;
+    public int frame = 0;
+    public int FrameCount = 600;
+    public int frameRate = 60;
+    public bool saveFrames = true;
 
     void Start()
     {
@@ -62,6 +68,35 @@ public class VideoRunner : MonoBehaviour
         MetricTensor = Matrix4x4.identity;
         Debug.Log(SystemInfo.graphicsDeviceType);
         totalPixels = MonitorSize.x * MonitorSize.y;
+    }
+
+    void DelFrame(float t) //enter what you to change per frame
+    {
+        float totalFrames = FrameCount;
+        float orbitFrames = 120f; // frames per full orbit, tune this
+
+        float phi = (frame / orbitFrames) * 2 * Mathf.PI;
+
+        float Rstart = 40f;
+        float Rin = CalcRisco();
+        float r = Rstart - (Rstart - Rin * 1.5f) * (frame / totalFrames);
+        float height = CameraPosition.w; // keep constant, or decrease too
+
+        CameraPosition.y = r * Mathf.Cos(phi);
+        CameraPosition.z = r * Mathf.Sin(phi);
+        // CameraPosition.w unchanged — height above disk
+
+        // Always look at origin
+        //float yaw = (phi * Mathf.Rad2Deg) + 180f;
+        //float pitch = -Mathf.Atan2(height, r) * Mathf.Rad2Deg;
+        float r3D = Mathf.Sqrt(
+            CameraPosition.y * CameraPosition.y +
+            CameraPosition.z * CameraPosition.z +
+            CameraPosition.w * CameraPosition.w);
+
+        float Xrot = Mathf.Asin(CameraPosition.z / r3D) * Mathf.Rad2Deg;
+        float Yrot = Mathf.Atan2(-CameraPosition.y, -CameraPosition.w) * Mathf.Rad2Deg;
+        CameraRotation = new Vector3(Xrot, Yrot, 90f);
     }
 
     void Dispatch()
@@ -141,64 +176,124 @@ public class VideoRunner : MonoBehaviour
 
     private void Update()
     {
-        if (finishedRenderingLastFrame)
+        if (isRenderingVideo)
         {
-            T_end = Time.time;
-            Debug.Log("Time taken: " + (T_end - T_start) + "s");
-            finishedRenderingLastFrame = false;
+            HandleVideoRendering();
         }
-        if (Input.GetKeyDown(KeyCode.S) && !isRendering) // save texture as png
+        if (Input.GetKeyDown(KeyCode.P) && !isRenderingVideo) //start Rendering
         {
-            Debug.Log("Saving texture...");
-            int name = 1;
-            for (; File.Exists(Application.dataPath + "/ImageExport/RenderedImage" + name + ".png"); name++) ; // find the first available file name
-            SaveRenderTextureToPNG(resultTexture, Application.dataPath + "/ImageExport/RenderedImage" + name + ".png"); // save the texture to a PNG file
-            Debug.Log("Texture saved to: " + Application.dataPath + "/ImageExport/RenderedImage" + name + ".png");
-        }
-        if (isRendering)
-        {
-            currentTile++;
-            Debug.Log(currentTile);
-            renderedPixels += CurrectTileSizeX * CurrectTileSizeY;
-            Debug.Log("Progress: " + (renderedPixels / (float)totalPixels * 100f) + "%");
-            Debug.Log("Rendered pixels: " + renderedPixels + " / " + totalPixels);
-            CurrectTileSizeX = Mathf.Min(tileSize, MonitorSize.x - OffsetX); // adjust tile size for edge cases
-            CurrectTileSizeY = Mathf.Min(tileSize, MonitorSize.y - OffsetY);
-            Dispatch();
-            if (OffsetX + CurrectTileSizeX < MonitorSize.x)
-                OffsetX += tileSize;
-            else
-            {
-                OffsetX = 0;
-                if (OffsetY + CurrectTileSizeY < MonitorSize.y)
-                    OffsetY += tileSize;
-                else
-                {
-                    //finished
-                    OffsetY = 0;
-                    isRendering = false;
-                    Debug.Log("Finished");
-                    finishedRenderingLastFrame = true;
-                }
-            }
-            GetComponent<Renderer>().material.mainTexture = resultTexture;
-        }
-        if (Input.GetKeyDown(KeyCode.P) && !isRendering) //start Rendering, is last because otherwise time measurement does not work
-        {
-            T_start = Time.time;
-            renderedPixels = 0;
-            currentTile = 0;
-            resultTexture = new Texture2D(MonitorSize.x, MonitorSize.y, TextureFormat.RGBA32, false);
-            resultTexture.filterMode = FilterMode.Point;
-            Debug.Log("Started");
-            CalcMetricTensor(CameraPosition, CalcR(CameraPosition, a), a, M);
-            MetricTensorAtCam = MetricTensor;
-            localTetradAtCam = localTetrad(CameraPosition);
-            localTetradAtCam = rotateLocalTetrad(localTetradAtCam, CameraRotation);
-            isRendering = true;
+            StartVideoRendering();
         }
     }
 
+    void StartVideoRendering()
+    {
+        resultTexture = new Texture2D(MonitorSize.x, MonitorSize.y, TextureFormat.RGBA32, false);
+        resultTexture.filterMode = FilterMode.Point;
+        while (Directory.Exists(Path.Combine(@"C:\Users\louia\Documents\Projekte\GRSim\VideoExports\Video_" + videoNumber))) //find next available folder to export video
+        {
+            videoNumber++;
+        }
+        Directory.CreateDirectory(Path.Combine(@"C:\Users\louia\Documents\Projekte\GRSim\VideoExports\Video_" + videoNumber));
+        isRenderingVideo = true;
+    }
+
+    void HandleVideoRendering()
+    {
+        if (isRenderingFrame)
+        {
+            HandleFrameRendering();
+        }
+        else if (finishedRenderingFrameLastFrame)
+        {
+            if (saveFrames)
+            {
+                SaveFrame();
+            }
+            if(frame < FrameCount)
+            {
+                DelFrame(frame / frameRate);
+                StartRenderingFrame();
+                frame++;
+            }
+            else
+            {
+                Debug.Log("Finished video rendering");
+                isRenderingVideo = false;
+                isRenderingFrame = false;
+            }
+        }
+        else 
+        {
+            StartRenderingFrame();
+        }
+    }
+
+    void StartRenderingFrame()
+    {
+        renderedPixels = 0;
+        currentTile = 0;
+        OffsetX = 0; // just to be sure, should be already 0 in FinishRendeing
+        OffsetY = 0;
+        resultTexture = new Texture2D(MonitorSize.x, MonitorSize.y, TextureFormat.RGBA32, false);
+        resultTexture.filterMode = FilterMode.Point;
+        Debug.Log("Started");
+        CalcMetricTensor(CameraPosition, CalcR(CameraPosition, a), a, M);
+        MetricTensorAtCam = MetricTensor;
+        localTetradAtCam = localTetrad(CameraPosition);
+        localTetradAtCam = rotateLocalTetrad(localTetradAtCam, CameraRotation);
+        isRenderingFrame = true;
+    }
+
+    void FinishFrameRendering()
+    {
+        OffsetY = 0;
+        OffsetX = 0;
+        isRenderingFrame = false;
+        Debug.Log("Finished");
+        finishedRenderingFrameLastFrame = true;
+    }
+
+    void HandleFrameRendering()
+    {
+        RenderTile();
+        if (OffsetX + CurrectTileSizeX < MonitorSize.x)
+            OffsetX += tileSize;
+        else
+        {
+            OffsetX = 0;
+            if (OffsetY + CurrectTileSizeY < MonitorSize.y)
+                OffsetY += tileSize;
+            else
+            {
+                //finished
+                FinishFrameRendering();
+            }
+        }
+        GetComponent<Renderer>().material.mainTexture = resultTexture;
+    }
+
+    void RenderTile()
+    {
+        currentTile++;
+        Debug.Log(currentTile);
+        renderedPixels += CurrectTileSizeX * CurrectTileSizeY;
+        Debug.Log("Progress: " + (renderedPixels / (float)totalPixels * 100f) + "%");
+        Debug.Log("Rendered pixels: " + renderedPixels + " / " + totalPixels);
+        CurrectTileSizeX = Mathf.Min(tileSize, MonitorSize.x - OffsetX); // adjust tile size for edge cases
+        CurrectTileSizeY = Mathf.Min(tileSize, MonitorSize.y - OffsetY);
+        Dispatch();
+    }
+
+    void SaveFrame()
+    {
+        Debug.Log("Saving Frame...");
+        SaveRenderTextureToPNG(resultTexture, Path.Combine(@"C:\Users\louia\Documents\Projekte\GRSim\VideoExports\Video_" + videoNumber, $"frame_{frame:D5}.png")); // save the texture to a PNG file
+        Debug.Log("Texture saved to: " + Path.Combine(@"C:\Users\louia\Documents\Projekte\GRSim\VideoExports\Video_" + videoNumber, $"frame_{frame:D5}.png"));
+    }
+
+
+    #region CameraInstantiation
     public float CalcR2(Vector4 pos, float a)
     {
         float rho2 = pos.y * pos.y + pos.z * pos.z + pos.w * pos.w;
@@ -337,6 +432,10 @@ public class VideoRunner : MonoBehaviour
         return Risco;
     }
 
+    #endregion;
+
+    #region Export Texture
+
     public static void SaveRenderTextureToPNG(Texture2D tex, string path)
     {
         RenderTexture previous = RenderTexture.active;
@@ -374,5 +473,7 @@ public class VideoRunner : MonoBehaviour
         tex.SetPixels32(pixels);
         tex.Apply();
     }
+
+    #endregion
 }
 

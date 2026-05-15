@@ -9,7 +9,7 @@ bool isNaN(float x)
 Texture2D<float4> Starmap;
 SamplerState sampler_Starmap;
 
-float3 SampleStarmap(float4 k)
+float3 SampleStarmap(float4 k) // calculated everything myself, started typing and copilot instantly suggested exactly the same... :pensive:, I am getting replaced, ain't I?
 {
     // k is the ray direction 4-vector; spatial part is k.yzw
     float3 dir = normalize(float3(k.y, k.z, k.w));
@@ -19,9 +19,9 @@ float3 SampleStarmap(float4 k)
     return Starmap.SampleLevel(sampler_Starmap, uv, 0).rgb;
 }
 
-float3 OpacityColor(float3 color1, float Opcaity, float3 color2)
+float4 OpacityColor(float4 color1, float4 color2)
 {
-    return color1 * Opcaity + color2 * (1 - Opcaity);
+    return color1 + color2 * (1 - color1.w);
 }
 
 
@@ -61,7 +61,6 @@ float RedShiftMul; // leave at 1 most of the time, can be used to exaggerate red
 float Rout; // outer radius of accretion disk
 float Sigma_zero;
 
-float4 CurrentColor;
 bool RenderDisk;
 
 int OffsetX;
@@ -356,7 +355,7 @@ float alpha(float r) // Approximation of Opacity Scaling of Accretion Disk
 }
 
 
-float3 phi_hatComponent(float x, float y, float r) //gets the phi component in Kerr-Shild from x and y in cartesian
+float3 phi_hatComponent(float x, float y, float r) //gets the phi component in Kerr-Shild-coordinates from x and y in cartesian
 {
     float3 phi_hat = float3(-y, x, 0);
     phi_hat *= 1 / r;
@@ -397,7 +396,7 @@ float Planck(float wavelength_nm, float T) //little bit different from the usual
     return 1.0 / (pow(wavelength_nm, 5.0) * (exp(hc_over_lkT) - 1.0));
 }
 // CIE 1931 color matching functions (Gaussian fit by Wyman et al.)
-float3 CIEColorMatch(float wl) //maps wavelength in nm to XYZ color space, not normalized, only for visible spectru
+float3 CIEColorMatch(float wl) //by claude, maps wavelength in nm to XYZ color space, not normalized, only for visible spectru
 {
     float3 xyz;
     xyz.x = 1.056 * exp(-0.5 * pow((wl - 599.8) / 37.9, 2))
@@ -478,6 +477,7 @@ float4 HitFlatAccretionDisk(float4 newPos, float4 oldPos, float4 k)
     }
     return float4(color, 1);
 }
+
 float4 HitSOI(float4 pos)
 {
     if (CalcR(pos, a) < Rsoi)
@@ -486,7 +486,8 @@ float4 HitSOI(float4 pos)
     }
     return float4(min(SampleStarmap(pos), 1).x * BackgroundBrightness, min(SampleStarmap(pos), 1).y * BackgroundBrightness, min(SampleStarmap(pos), 1).z * BackgroundBrightness, 1);
 }
-float4 HitObject(float4 newPos, float4 oldPos, float4 k)
+
+float4 HitObject(float4 newPos, float4 oldPos, float4 k, float4 prevColor)
 {
     [unroll] 
     for (int mu = 0; mu < 4; mu++)
@@ -501,7 +502,7 @@ float4 HitObject(float4 newPos, float4 oldPos, float4 k)
     }
     
     float4 disk = HitFlatAccretionDisk(newPos, oldPos, k);
-    if (disk.w == 1)
+    if (disk.w >0)
     {
         return disk;
     }
@@ -514,14 +515,13 @@ float4 HitObject(float4 newPos, float4 oldPos, float4 k)
     return float4(0, 0, 0, 0);
 }
 
-// ---- ray loop -------------------------------------------------------------
-
 float4 TraceRay(LightRay start)
 {
     LightRay nextPos = start;
     LightRay prevPos = start;
+    float4 CurrentColor;
 
-    //[loop] // <-- critical: do NOT unroll the 400-step loop
+    //[loop]
     for (int step = 0; step < maxSteps; step++)
     {
         prevPos = nextPos;
@@ -529,23 +529,24 @@ float4 TraceRay(LightRay start)
         float precision = (r - 2 * M < margin) ? preciseSteps : StepSize;
 
         nextPos = StepLight(nextPos, precision);
-        float4 Hit = HitObject(nextPos.pos, prevPos.pos, nextPos.k);
-        if (Hit.w != 0)
-            return float4(Hit.rgb, 1);
+        CurrentColor = HitObject(nextPos.pos, prevPos.pos, nextPos.k, CurrentColor);
+        float alpha = CurrentColor.w; //´only for readability
+        if (alpha >= 1) // >= just to be safe
+            return float4(CurrentColor.rgb, 1);
     }
     return float4(0, 0, 1, 1); // ran out of steps -> blue
 }
 
 // ---- kernel ---------------------------------------------------------------
 
-[numthreads(8, 8, 1)]
-void CSMain(uint3 id : SV_DispatchThreadID)
+[numthreads(8, 8, 1)] //depends on computer whats best
+void CSMain(uint3 id : SV_DispatchThreadID) 
 {
-    if ((int) id.x + OffsetX >= MonitorSize.x || (int) id.y + OffsetY >= MonitorSize.y)
+    if ((int) id.x + OffsetX >= MonitorSize.x || (int) id.y + OffsetY >= MonitorSize.y) //just to check, else computer MIGHT crash
+    {
         return;
-    LightRay ray = instantiateRay(CameraPosition, FOV,
-                                  MonitorSize.x, MonitorSize.y,
-                                  float2(id.x + OffsetX, id.y + OffsetY), localTetradAtCam);
+    }
+    LightRay ray = instantiateRay(CameraPosition, FOV, MonitorSize.x, MonitorSize.y, float2(id.x + OffsetX, id.y + OffsetY), localTetradAtCam);
     float4 color = TraceRay(ray);
     Result[int2(id.x, id.y)] = float4(min(color.x, 1), min(color.y, 1), min(color.z, 1), 1);
 }
