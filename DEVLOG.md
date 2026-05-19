@@ -31,7 +31,11 @@
 - 24-26.4 translated to hlsl
 - 27.4 made better version of Accretiondisk
 - 28.4 fixed Accretiondisk and added Background image
-- 30.4 Implemented Redshift
+- 19.4 debugged/finished Accretiondisk
+- 30.4, 1.5 Implemented Redshift
+- 9.5 Added Photo Export
+- 15.5 Added Video capabilities
+- 16.5 "Added" Live Rendering
 
 ## ToDo
 
