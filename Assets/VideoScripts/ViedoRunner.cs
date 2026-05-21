@@ -63,6 +63,9 @@ public class VideoRunner : MonoBehaviour
     public float speed = 1f;
     public bool  useDelFrame = true;
 
+    public float SpectrumOffset = 0f;
+    public float RoutWidthPercent = 20f;
+
     void Start()
     {
         diag = Matrix4x4.identity;
@@ -76,10 +79,10 @@ public class VideoRunner : MonoBehaviour
     {
         //sample to rotate camera around the black hole while moving inwards
         Debug.Log(t);
-        float radius = 60;// Mathf.Max(60 - t * 0.3f, 0);
+        float radius = Mathf.Max(60 - t * 0.6f, 0);
         float angle = t * 5f;
         Debug.Log(angle);
-        CameraPosition = new Vector4(0, radius * Mathf.Cos(angle * Mathf.Deg2Rad), radius * Mathf.Cos(angle * Mathf.Deg2Rad), radius / 6 * Mathf.Sin(angle * Mathf.Deg2Rad));
+        CameraPosition = new Vector4(0, radius * Mathf.Cos(angle * Mathf.Deg2Rad), radius * Mathf.Sin(angle * Mathf.Deg2Rad), 10 * Mathf.Cos(angle * Mathf.Deg2Rad));
         CameraRotation = new Vector3(angle, 270, 90);
     }
 
@@ -116,9 +119,11 @@ public class VideoRunner : MonoBehaviour
         fieldCS.SetFloat("RedShiftMul", RedShiftMul);
         fieldCS.SetFloat("Rout", Rout);
         fieldCS.SetFloat("Sigma_zero", Sigma_zero);
-        fieldCS.SetBool("RenderDisc", RenderDisk);
+        fieldCS.SetBool("RenderDisk", RenderDisk);
         fieldCS.SetInt("OffsetX", OffsetX);
         fieldCS.SetInt("OffsetY", OffsetY);
+        fieldCS.SetFloat("SpectrumOffset", SpectrumOffset);
+        fieldCS.SetFloat("Rout_width", RoutWidthPercent / 100f * Rout);
         fieldCS.Dispatch(
             kernel,
             Mathf.CeilToInt(CurrectTileSizeX / 8f),

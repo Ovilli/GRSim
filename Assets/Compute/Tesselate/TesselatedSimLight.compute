@@ -62,6 +62,8 @@ int OffsetX;
 int OffsetY;
 
 float4 CurrentColor;
+float SpectrumOffset;
+float Rout_width;
 
 struct LightRay
 {
@@ -358,7 +360,9 @@ float SurfaceDensity(float r) //Surface Density of Novikov Thorne Accretion Disk
 }
 float AccAlpha(float r) // Approximation of Opacity Scaling of Accretion Disk
 {
-    return 1 - exp(-SurfaceDensity(r) / Sigma_zero);
+    float nt = 1 - exp(-SurfaceDensity(r) / Sigma_zero);
+    float fade = 1 - smoothstep(Rout - Rout_width, Rout, r);
+    return nt * fade;
 }
 
 
@@ -431,9 +435,9 @@ float3 BlackbodyRGB(float T, float x, float y, float3 k)
     [loop]
     for (int i = 0; i < 150; i++) //loops over a discrete set of visible frequencys and calulates theire strenght
     {
-        float wl = 360.0 + i * 2.6; // calculate wavelength
+        float wl = 360.0 + i * 2.6 + SpectrumOffset; // calculate wavelength
         float red_shift = RedShift(CalcR(float4(0, x, y, 0), a), x, y, k); //calculate redshift to/from that point
-        xyz += CIEColorMatch(wl) * Planck(wl * red_shift, T); // calculates original frequency without redshift, calculates strenght and adds back 
+        xyz += CIEColorMatch(wl - SpectrumOffset) * Planck(wl * red_shift, T); // calculates original frequency without redshift, calculates strenght and adds back 
     }
     return max(XYZtoRGB(xyz), 0); //max with 0 to avoid negative colors, which fsr can happen it gaussian fit, or maybe just messed up somewhere
 }
@@ -448,7 +452,6 @@ float3 AccretionDiskColor(float4 ip, float4 k, float r, float Rin, float Rout, f
         return float3(0, 0, -1); // too cold to emit visible light, return seethrew
 
     float3 color = BlackbodyRGB(T, x, y, float3(k.y, k.z, k.w)); // calc color 
-    //this won't work anymore, because the red shift can make the color brighter than the peak temperature color, so need to scale it down to avoid oversaturation, also this is more physically accurate because the disk can be brighter than the peak temperature color due to red shift, but it can't be brighter than the peak temperature color without red shift
     float3 peak = BlackbodyRGB(T_max, x, y, float3(k.y, k.z, k.w)); // color at peak temperature, used to scale the color so that the brightest point is not oversaturated, avoid div by 0 just in case
     float scale = max(peak.r, max(peak.g, peak.b));
     color /= max(scale, 1e-30);
