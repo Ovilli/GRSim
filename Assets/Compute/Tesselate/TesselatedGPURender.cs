@@ -97,7 +97,7 @@ public class TesselatedGPURender : MonoBehaviour
         fieldCS.SetFloat("RedShiftMul", RedShiftMul);
         fieldCS.SetFloat("Rout", Rout);
         fieldCS.SetFloat("Sigma_zero", Sigma_zero);
-        fieldCS.SetBool("RenderDisc", RenderDisk);
+        fieldCS.SetBool("RenderDisk", RenderDisk);
         fieldCS.SetInt("OffsetX", OffsetX);
         fieldCS.SetInt("OffsetY", OffsetY);
         fieldCS.Dispatch(

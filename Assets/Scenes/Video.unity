@@ -244,19 +244,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c1c24d8decea3764bba3e911582fdb3b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VideoRunner
-  CameraPosition: {x: 0, y: 40, z: 0, w: 0}
-  CameraRotation: {x: 0, y: 255, z: 90}
+  CameraPosition: {x: 0, y: 0, z: 0, w: 30}
+  CameraRotation: {x: 0, y: 270, z: 90}
   FOV: 1.5
-  MonitorSize: {x: 1920, y: 1080}
+  MonitorSize: {x: 256, y: 144}
   M: 2
-  a: 1
+  a: 0
   StepSize: 0.2
   preciseSteps: 0.01
   Rsoi: 100
   maxSteps: 10000
   margin: 0.1
   SuckInMargin: 1.1
-  T_max: 2000
+  T_max: 14200
   AccBrightness: 1
   BackgroundBrightness: 64
   TargetPlane: {fileID: 1078926680}
@@ -264,14 +264,16 @@ MonoBehaviour:
   DeepStarMap: {fileID: 2800000, guid: 0cf94cfc70d094a40b10be3629fbe450, type: 3}
   RedShiftMul: 1
   Rout: 70
-  Sigma_zero: 0
-  RenderDisk: 0
+  Sigma_zero: 0.4
+  RenderDisk: 1
   tileSize: 500
   isRenderingVideo: 0
   frame: 0
-  FrameCount: 600
+  FrameCount: 864
   frameRate: 60
-  saveFrames: 1
+  saveFrames: 0
+  speed: 5
+  useDelFrame: 1
 --- !u!1 &1209598649
 GameObject:
   m_ObjectHideFlags: 0

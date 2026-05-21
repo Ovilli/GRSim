@@ -60,6 +60,8 @@ public class VideoRunner : MonoBehaviour
     public int FrameCount = 600;
     public int frameRate = 60;
     public bool saveFrames = true;
+    public float speed = 1f;
+    public bool  useDelFrame = true;
 
     void Start()
     {
@@ -72,31 +74,13 @@ public class VideoRunner : MonoBehaviour
 
     void DelFrame(float t) //enter what you to change per frame
     {
-        float totalFrames = FrameCount;
-        float orbitFrames = 120f; // frames per full orbit, tune this
-
-        float phi = (frame / orbitFrames) * 2 * Mathf.PI;
-
-        float Rstart = 40f;
-        float Rin = CalcRisco();
-        float r = Rstart - (Rstart - Rin * 1.5f) * (frame / totalFrames);
-        float height = CameraPosition.w; // keep constant, or decrease too
-
-        CameraPosition.y = r * Mathf.Cos(phi);
-        CameraPosition.z = r * Mathf.Sin(phi);
-        // CameraPosition.w unchanged — height above disk
-
-        // Always look at origin
-        //float yaw = (phi * Mathf.Rad2Deg) + 180f;
-        //float pitch = -Mathf.Atan2(height, r) * Mathf.Rad2Deg;
-        float r3D = Mathf.Sqrt(
-            CameraPosition.y * CameraPosition.y +
-            CameraPosition.z * CameraPosition.z +
-            CameraPosition.w * CameraPosition.w);
-
-        float Xrot = Mathf.Asin(CameraPosition.z / r3D) * Mathf.Rad2Deg;
-        float Yrot = Mathf.Atan2(-CameraPosition.y, -CameraPosition.w) * Mathf.Rad2Deg;
-        CameraRotation = new Vector3(Xrot, Yrot, 90f);
+        //sample to rotate camera around the black hole while moving inwards
+        Debug.Log(t);
+        float radius = 60;// Mathf.Max(60 - t * 0.3f, 0);
+        float angle = t * 5f;
+        Debug.Log(angle);
+        CameraPosition = new Vector4(0, radius * Mathf.Cos(angle * Mathf.Deg2Rad), radius * Mathf.Cos(angle * Mathf.Deg2Rad), radius / 6 * Mathf.Sin(angle * Mathf.Deg2Rad));
+        CameraRotation = new Vector3(angle, 270, 90);
     }
 
     void Dispatch()
@@ -182,6 +166,7 @@ public class VideoRunner : MonoBehaviour
         }
         if (Input.GetKeyDown(KeyCode.P) && !isRenderingVideo) //start Rendering
         {
+            Debug.Log("Starting video rendering");
             StartVideoRendering();
         }
     }
@@ -190,11 +175,14 @@ public class VideoRunner : MonoBehaviour
     {
         resultTexture = new Texture2D(MonitorSize.x, MonitorSize.y, TextureFormat.RGBA32, false);
         resultTexture.filterMode = FilterMode.Point;
-        while (Directory.Exists(Path.Combine(@"C:\Users\louia\Documents\Projekte\GRSim\VideoExports\Video_" + videoNumber))) //find next available folder to export video
+        if(saveFrames)
         {
-            videoNumber++;
+            while (Directory.Exists(Path.Combine(@"C:\Users\louia\Documents\Projekte\GRSim\VideoExports\Video_" + videoNumber))) //find next available folder to export video
+            {
+                videoNumber++;
+            }
+            Directory.CreateDirectory(Path.Combine(@"C:\Users\louia\Documents\Projekte\GRSim\VideoExports\Video_" + videoNumber));
         }
-        Directory.CreateDirectory(Path.Combine(@"C:\Users\louia\Documents\Projekte\GRSim\VideoExports\Video_" + videoNumber));
         isRenderingVideo = true;
     }
 
@@ -212,7 +200,11 @@ public class VideoRunner : MonoBehaviour
             }
             if(frame < FrameCount)
             {
-                DelFrame(frame / frameRate);
+                if (useDelFrame)
+                {
+                    float t = frame / (float)frameRate;
+                    DelFrame(t * speed);
+                }
                 StartRenderingFrame();
                 frame++;
             }
@@ -268,6 +260,7 @@ public class VideoRunner : MonoBehaviour
             {
                 //finished
                 FinishFrameRendering();
+                //GetComponent<Renderer>().material.mainTexture = resultTexture;
             }
         }
         GetComponent<Renderer>().material.mainTexture = resultTexture;

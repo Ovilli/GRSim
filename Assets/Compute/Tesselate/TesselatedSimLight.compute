@@ -19,11 +19,6 @@ float3 SampleStarmap(float4 k) // calculated everything myself, started typing a
     return Starmap.SampleLevel(sampler_Starmap, uv, 0).rgb;
 }
 
-float4 OpacityColor(float4 color1, float4 color2)
-{
-    return color1 + color2 * (1 - color1.w);
-}
-
 
 RWTexture2D<float4> Result;
 
@@ -66,6 +61,8 @@ bool RenderDisk;
 int OffsetX;
 int OffsetY;
 
+float4 CurrentColor;
+
 struct LightRay
 {
     float4 pos;
@@ -97,6 +94,17 @@ float4x4 GetDelG(DelMetric dM, int i)
     return dM.delG3;
 }
 
+
+void OpacityColor(float4 color2)
+{
+    if (color2.w <= 0)
+        return;
+    float4 c2 = color2;
+    float alpha = (1 - CurrentColor.w) * c2.w;
+    c2 *= alpha;
+    c2.w = alpha;
+    CurrentColor += c2;
+}
 
 float CalcR2(float4 pos, float a)
 {
@@ -348,10 +356,9 @@ float SurfaceDensity(float r) //Surface Density of Novikov Thorne Accretion Disk
 {
     return pow(r, -0.6) * pow(1 - sqrt(Rin / r), -0.8);
 }
-float alpha(float r) // Approximation of Opacity Scaling of Accretion Disk
+float AccAlpha(float r) // Approximation of Opacity Scaling of Accretion Disk
 {
     return 1 - exp(-SurfaceDensity(r) / Sigma_zero);
-
 }
 
 
@@ -475,7 +482,8 @@ float4 HitFlatAccretionDisk(float4 newPos, float4 oldPos, float4 k)
     {
         return float4(0, 0, 0, -1); //return all seethrew
     }
-    return float4(color, 1);
+    float alpha = AccAlpha(r);
+    return float4(color, alpha);
 }
 
 float4 HitSOI(float4 pos)
@@ -498,19 +506,22 @@ float4 HitObject(float4 newPos, float4 oldPos, float4 k, float4 prevColor)
     
     if (HitBlackHole(newPos))
     {
-        return float4(0, 0, 0, 1); // black
+        OpacityColor(float4(0, 0, 0, 1)); // black
+        return CurrentColor;
     }
     
     float4 disk = HitFlatAccretionDisk(newPos, oldPos, k);
-    if (disk.w >0)
+    if (disk.w > 0)
     {
-        return disk;
+        OpacityColor(disk);
+        return CurrentColor;
     }
     
     float4 soi = HitSOI(newPos);
     if (soi.w == 1)
     {
-        return soi;
+        OpacityColor(soi);
+        return CurrentColor;
     }
     return float4(0, 0, 0, 0);
 }
@@ -542,6 +553,7 @@ float4 TraceRay(LightRay start)
 [numthreads(8, 8, 1)] //depends on computer whats best
 void CSMain(uint3 id : SV_DispatchThreadID) 
 {
+    CurrentColor = float4(0, 0, 0, 0);
     if ((int) id.x + OffsetX >= MonitorSize.x || (int) id.y + OffsetY >= MonitorSize.y) //just to check, else computer MIGHT crash
     {
         return;
