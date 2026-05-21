@@ -36,6 +36,7 @@
 - 9.5 Added Photo Export
 - 15.5 Added Video capabilities
 - 16.5 "Added" Live Rendering
+- 21.5 fixed Accretion Disk and added disk opacity
 
 ## ToDo
 
