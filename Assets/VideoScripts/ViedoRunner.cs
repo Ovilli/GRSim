@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net.NetworkInformation;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UIElements;
@@ -126,8 +127,8 @@ public class VideoRunner : MonoBehaviour
         fieldCS.SetFloat("Rout_width", RoutWidthPercent / 100f * Rout);
         fieldCS.Dispatch(
             kernel,
-            Mathf.CeilToInt(CurrectTileSizeX / 128f),
-            Mathf.CeilToInt(CurrectTileSizeY / 1f),
+            Mathf.CeilToInt(CurrectTileSizeX / 8f),
+            Mathf.CeilToInt(CurrectTileSizeY / 8f),
             1
         );
         SetTile(OffsetX, OffsetY, CurrectTileSizeX, CurrectTileSizeY, tile);
@@ -189,6 +190,7 @@ public class VideoRunner : MonoBehaviour
             Directory.CreateDirectory(Path.Combine(@"C:\Users\louia\Documents\Projekte\GRSim\VideoExports\Video_" + videoNumber));
         }
         isRenderingVideo = true;
+        SaveVideoMetaData(Path.Combine(@"C:\Users\louia\Documents\Projekte\GRSim\VideoExports\Video_" + videoNumber));
     }
 
     void HandleVideoRendering()
@@ -461,6 +463,108 @@ public class VideoRunner : MonoBehaviour
     #endregion;
 
     #region Export Texture
+
+    public string GetDelFrameSourceCode([CallerFilePath] string sourceFilePath = "") // by Gemini
+    {
+        if (string.IsNullOrEmpty(sourceFilePath) || !File.Exists(sourceFilePath))
+        {
+            UnityEngine.Debug.LogError("Source file could not be automatically located.");
+            return string.Empty;
+        }
+
+        // Read all lines of the active script file
+        string[] fileLines = File.ReadAllLines(sourceFilePath);
+
+        int startLine = -1;
+
+        // Search for the method signature line-by-line
+        for (int i = 0; i < fileLines.Length; i++)
+        {
+            // Tailor this string check to match how you define your function
+            if (fileLines[i].Contains("void DelFrame()"))
+            {
+                startLine = i;
+                break;
+            }
+        }
+
+        if (startLine == -1)
+        {
+            UnityEngine.Debug.LogError("Could not find 'void DelFrame()' within the source file.");
+            return string.Empty;
+        }
+
+        // Parse lines sequentially until the method's closing brace is balanced
+        System.Text.StringBuilder methodBody = new System.Text.StringBuilder();
+        int braceCount = 0;
+        bool foundOpeningBrace = false;
+
+        for (int i = startLine; i < fileLines.Length; i++)
+        {
+            string line = fileLines[i];
+            methodBody.AppendLine(line);
+
+            foreach (char c in line)
+            {
+                if (c == '{')
+                {
+                    braceCount++;
+                    foundOpeningBrace = true;
+                }
+                else if (c == '}')
+                {
+                    braceCount--;
+                }
+            }
+
+            // Once the opening brace has been hit and counter balances back to 0, we are done
+            if (foundOpeningBrace && braceCount == 0)
+            {
+                break;
+            }
+        }
+
+        return methodBody.ToString();
+    }
+
+    public void SaveVideoMetaData(string path)
+    {
+        // write meta data file, so that the image can be recreated with the same settings (by me)
+        string metaDataPath = Path.ChangeExtension(path, ".metaData.txt");
+        string metaDataContent =
+            $"CameraPosition: {CameraPosition.x}, {CameraPosition.y}, {CameraPosition.z}, {CameraPosition.w}\n" +
+            $"CameraRotation: {CameraRotation.x}, {CameraRotation.y}, {CameraRotation.z}\n" +
+            $"FOV: {FOV}\n" +
+            $"CameraResolution: {MonitorSize.x}, {MonitorSize.y}\n" +
+            $"M: {M}\n" +
+            $"a: {a}\n" +
+            $"StepSize: {StepSize}\n" +
+            $"PreciseStepSize: {preciseSteps}\n" +
+            $"Rsoi: {Rsoi}\n" +
+            $"maxSteps: {maxSteps}\n" +
+            $"margin: {margin}\n" +
+            $"SuckInMargin: {SuckInMargin}\n" +
+            $"T_max: {T_max}\n" +
+            $"AccBrightness: {AccBrightness}\n" +
+            $"BackgroundBrightness: {BackgroundBrightness}\n" +
+            $"RedShiftMul: {RedShiftMul}\n" +
+            $"Rout: {Rout}\n" +
+            $"Sigma_zero: {Sigma_zero}\n" +
+            $"RenderDisk: {RenderDisk}\n" +
+            $"TileSize: {tileSize}\n" +
+            $"RoutWidthPercent: {RoutWidthPercent}\n" +
+            $"SpectrumOffset: {SpectrumOffset}\n" +
+            $"Date: {System.DateTime.Now}\n" + 
+            $"DelFrameFunction:\n"
+            ;
+        if (useDelFrame)
+        {
+            // get the del frame function source code
+            string DelFrameFunction = GetDelFrameSourceCode(Application.dataPath + "/VideoScripts/VideoRunner.cs");
+            metaDataContent += DelFrameFunction;
+        }
+        File.WriteAllText(metaDataPath, metaDataContent);
+    }
 
     public static void SaveRenderTextureToPNG(Texture2D tex, string path) // by ChatGPT
     {

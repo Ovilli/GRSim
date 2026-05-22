@@ -266,7 +266,7 @@ MonoBehaviour:
   Rout: 60
   Sigma_zero: 0.4
   RenderDisk: 1
-  tileSize: 1024
+  tileSize: 512
   isRenderingVideo: 0
   frame: 0
   FrameCount: 600

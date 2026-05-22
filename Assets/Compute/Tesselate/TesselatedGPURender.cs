@@ -384,9 +384,8 @@ public class TesselatedGPURender : MonoBehaviour
             File.WriteAllBytes(path, png);
 
             Object.Destroy(tex);
-
-            // write meta data file, so that the image can be recreated with the same settings
-            // create file with same name but .metaData.txt extension, because unity already uses .meta files for other purposes
+            
+            // write meta data file, so that the image can be recreated with the same settings (by me)
             string metaDataPath = Path.ChangeExtension(path, ".metaData.txt");
             string metaDataContent =
                 $"CameraPosition: {CameraPosition.x}, {CameraPosition.y}, {CameraPosition.z}, {CameraPosition.w}\n" +
