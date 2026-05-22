@@ -1,3 +1,6 @@
+<img width="1920" height="1080" alt="RenderedImage24" src="https://github.com/user-attachments/assets/0a9f0bbc-5366-4c69-b80a-f59cb4e2bb6c" />
+<img width="3840" height="2160" alt="RenderedImage1" src="https://github.com/user-attachments/assets/7594e694-5aa9-4c6d-ad3b-e07a1dbf75df" />
+
 # GRSim
 
 Image of simulated H (deviation from Minkowski Metric)
