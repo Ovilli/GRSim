@@ -255,7 +255,9 @@ public class VideoRunner : MonoBehaviour
     {
         RenderTile();
         if (OffsetX + CurrectTileSizeX < MonitorSize.x)
+        {
             OffsetX += tileSize;
+        }
         else
         {
             OffsetX = 0;
@@ -309,8 +311,12 @@ public class VideoRunner : MonoBehaviour
         float H = CalcH(r, z, M, a);
         Vector4 l = CalcL(position, r, a);
         for (int mu = 0; mu < 4; mu++)
+        {
             for (int nu = 0; nu < 4; nu++)
+            {
                 MetricTensor[mu, nu] = diag[mu, nu] + 2 * H * l[mu] * l[nu];
+            }
+        }
     }
 
     Vector4 CalcL(Vector4 pos, float r, float a)
@@ -341,11 +347,13 @@ public class VideoRunner : MonoBehaviour
             {
                 float Q = 0, D = 0;
                 for (int alpha = 0; alpha < 4; alpha++)
+                {
                     for (int beta = 0; beta < 4; beta++)
                     {
                         Q += MetricTensorAtCam[alpha, beta] * v[alpha, BaseVector] * u[beta];
                         D += MetricTensorAtCam[alpha, beta] * u[alpha] * u[beta];
                     }
+                }
                 sqv[Component, BaseVector] = v[Component, BaseVector] - Q / D * u[Component];
             }
         }
@@ -358,35 +366,49 @@ public class VideoRunner : MonoBehaviour
         {
             float sum = 0;
             for (int alpha = 0; alpha < 4; alpha++)
+            {
                 for (int beta = 0; beta < 4; beta++)
+                {
                     sum += MetricTensorAtCam[alpha, beta] * sqv[alpha, 1] * sqv[beta, 1];
+                }
+            }
             e1[dim] = sqv[dim, 1] / Mathf.Sqrt(Mathf.Abs(sum));
         }
         for (int dim = 0; dim < 4; dim++)
         {
             float sum = 0;
             for (int alpha = 0; alpha < 4; alpha++)
+            {
                 for (int beta = 0; beta < 4; beta++)
+                {
                     sum += MetricTensorAtCam[alpha, beta] * sqv[alpha, 2] * e1[beta];
+                }
+            }
             sqvs2[dim] = sqv[dim, 2] - sum * e1[dim];
         }
         for (int dim = 0; dim < 4; dim++)
         {
             float sum = 0;
             for (int alpha = 0; alpha < 4; alpha++)
+            {
                 for (int beta = 0; beta < 4; beta++)
+                {
                     sum += MetricTensorAtCam[alpha, beta] * sqvs2[alpha] * sqvs2[beta];
+                }
+            }
             e2[dim] = sqvs2[dim] / Mathf.Sqrt(Mathf.Abs(sum));
         }
         for (int dim = 0; dim < 4; dim++)
         {
             float sum1 = 0, sum2 = 0;
             for (int alpha = 0; alpha < 4; alpha++)
+            {
                 for (int beta = 0; beta < 4; beta++)
                 {
                     sum1 += MetricTensorAtCam[alpha, beta] * sqv[alpha, 3] * e1[beta];
                     sum2 += MetricTensorAtCam[alpha, beta] * sqv[alpha, 3] * e2[beta];
                 }
+            }
             sqvs3[dim] = sqv[dim, 3] - sum1 * e1[dim] - sum2 * e2[dim];
         }
         for (int dim = 0; dim < 4; dim++)

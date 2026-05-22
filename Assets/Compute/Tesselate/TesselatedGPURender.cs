@@ -221,8 +221,12 @@ public class TesselatedGPURender : MonoBehaviour
         float H = CalcH(r, z, M, a);
         Vector4 l = CalcL(position, r, a);
         for (int mu = 0; mu < 4; mu++)
+        {
             for (int nu = 0; nu < 4; nu++)
+            {
                 MetricTensor[mu, nu] = diag[mu, nu] + 2 * H * l[mu] * l[nu];
+            }
+        }
     }
 
     Vector4 CalcL(Vector4 pos, float r, float a) // null vector field, see https://en.wikipedia.org/wiki/Kerr_metric#Kerr%E2%80%93Schild_coordinates (referenced as k)
@@ -239,7 +243,7 @@ public class TesselatedGPURender : MonoBehaviour
         return (M * r * r * r) / (r * r * r * r + a * a * z * z);
     }
 
-    public Matrix4x4 localTetrad(Vector4 pos) //took about 2 weeks and 4 different approaches to get this right
+    public Matrix4x4 localTetrad(Vector4 pos)
     {
         Vector4 u = new Vector4(1f / Mathf.Sqrt(Mathf.Abs(-MetricTensorAtCam[0, 0])), 0, 0, 0);
         Vector4 v1 = new Vector4(0, 1, 0, 0);
@@ -253,11 +257,13 @@ public class TesselatedGPURender : MonoBehaviour
             {
                 float Q = 0, D = 0;
                 for (int alpha = 0; alpha < 4; alpha++)
+                {
                     for (int beta = 0; beta < 4; beta++)
                     {
                         Q += MetricTensorAtCam[alpha, beta] * v[alpha, BaseVector] * u[beta];
                         D += MetricTensorAtCam[alpha, beta] * u[alpha] * u[beta];
                     }
+                }
                 sqv[Component, BaseVector] = v[Component, BaseVector] - Q / D * u[Component];
             }
         }
@@ -270,35 +276,49 @@ public class TesselatedGPURender : MonoBehaviour
         {
             float sum = 0;
             for (int alpha = 0; alpha < 4; alpha++)
+            {
                 for (int beta = 0; beta < 4; beta++)
+                {
                     sum += MetricTensorAtCam[alpha, beta] * sqv[alpha, 1] * sqv[beta, 1];
+                }
+            }
             e1[dim] = sqv[dim, 1] / Mathf.Sqrt(Mathf.Abs(sum));
         }
         for (int dim = 0; dim < 4; dim++)
         {
             float sum = 0;
             for (int alpha = 0; alpha < 4; alpha++)
+            {
                 for (int beta = 0; beta < 4; beta++)
+                {
                     sum += MetricTensorAtCam[alpha, beta] * sqv[alpha, 2] * e1[beta];
+                }
+            }
             sqvs2[dim] = sqv[dim, 2] - sum * e1[dim];
         }
         for (int dim = 0; dim < 4; dim++)
         {
             float sum = 0;
             for (int alpha = 0; alpha < 4; alpha++)
+            {
                 for (int beta = 0; beta < 4; beta++)
+                {
                     sum += MetricTensorAtCam[alpha, beta] * sqvs2[alpha] * sqvs2[beta];
+                }
+            }
             e2[dim] = sqvs2[dim] / Mathf.Sqrt(Mathf.Abs(sum));
         }
         for (int dim = 0; dim < 4; dim++)
         {
             float sum1 = 0, sum2 = 0;
             for (int alpha = 0; alpha < 4; alpha++)
+            {
                 for (int beta = 0; beta < 4; beta++)
                 {
                     sum1 += MetricTensorAtCam[alpha, beta] * sqv[alpha, 3] * e1[beta];
                     sum2 += MetricTensorAtCam[alpha, beta] * sqv[alpha, 3] * e2[beta];
                 }
+            }
             sqvs3[dim] = sqv[dim, 3] - sum1 * e1[dim] - sum2 * e2[dim];
         }
         for (int dim = 0; dim < 4; dim++)
@@ -317,12 +337,17 @@ public class TesselatedGPURender : MonoBehaviour
         Matrix4x4 Rtest = Matrix4x4.Rotate(Quaternion.Euler(Angles));
         Matrix4x4 R = Matrix4x4.zero;
         for (int i = 1; i < 4; i++)
+        {
             for (int j = 1; j < 4; j++)
+            {
                 R[i, j] = Rtest[i - 1, j - 1];
+            }
+        }
         R[0, 0] = 1; // do not disturb time
 
         Matrix4x4 e = new Matrix4x4();
         for (int mu = 0; mu < 4; mu++)
+        {
             for (int aa = 0; aa < 4; aa++)
             {
                 float sum = 0;
@@ -330,6 +355,7 @@ public class TesselatedGPURender : MonoBehaviour
                     sum += Tetrad[mu, b] * R[b, aa];
                 e[mu, aa] = sum;
             }
+        }
         return e;
     }
 
@@ -342,7 +368,7 @@ public class TesselatedGPURender : MonoBehaviour
         return Risco;
     }
 
-    public static void SaveRenderTextureToPNG(Texture2D tex, string path) //by ChatGPT
+    public void SaveRenderTextureToPNG(Texture2D tex, string path) //by ChatGPT
     {
         RenderTexture previous = RenderTexture.active;
 
@@ -358,6 +384,36 @@ public class TesselatedGPURender : MonoBehaviour
             File.WriteAllBytes(path, png);
 
             Object.Destroy(tex);
+
+            // write meta data file, so that the image can be recreated with the same settings
+            // create file with same name but .metaData.txt extension, because unity already uses .meta files for other purposes
+            string metaDataPath = Path.ChangeExtension(path, ".metaData.txt");
+            string metaDataContent =
+                $"CameraPosition: {CameraPosition.x}, {CameraPosition.y}, {CameraPosition.z}, {CameraPosition.w}\n" +
+                $"CameraRotation: {CameraRotation.x}, {CameraRotation.y}, {CameraRotation.z}\n" +
+                $"FOV: {FOV}\n" +
+                $"CameraResolution: {MonitorSize.x}, {MonitorSize.y}\n" +
+                $"M: {M}\n" +
+                $"a: {a}\n" +
+                $"StepSize: {StepSize}\n" +
+                $"PreciseStepSize: {preciseSteps}\n" +
+                $"Rsoi: {Rsoi}\n" +
+                $"maxSteps: {maxSteps}\n" + 
+                $"margin: {margin}\n" +
+                $"SuckInMargin: {SuckInMargin}\n" +
+                $"T_max: {T_max}\n" +
+                $"AccBrightness: {AccBrightness}\n" +
+                $"BackgroundBrightness: {BackgroundBrightness}\n" +
+                $"RedShiftMul: {RedShiftMul}\n" +
+                $"Rout: {Rout}\n" +
+                $"Sigma_zero: {Sigma_zero}\n" +
+                $"RenderDisk: {RenderDisk}\n" +
+                $"TileSize: {tileSize}\n" +
+                $"RoutWidthPercent: {RoutWidthPercent}\n" +
+                $"SpectrumOffset: {SpectrumOffset}\n" +
+                $"Date: {System.DateTime.Now}\n"
+                ;
+            File.WriteAllText(metaDataPath, metaDataContent);
         }
         finally
         {
