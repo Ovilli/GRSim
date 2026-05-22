@@ -37,6 +37,7 @@
 - 15.5 Added Video capabilities
 - 16.5 "Added" Live Rendering
 - 21.5 fixed Accretion Disk and added disk opacity
+- 22.5 Implemented image meta data, Started implementing Video meta data
 
 ## ToDo
 
