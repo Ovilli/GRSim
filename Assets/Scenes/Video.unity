@@ -247,9 +247,9 @@ MonoBehaviour:
   CameraPosition: {x: 0, y: 0, z: 0, w: 30}
   CameraRotation: {x: 0, y: 270, z: 90}
   FOV: 1.5
-  MonitorSize: {x: 256, y: 144}
+  MonitorSize: {x: 1920, y: 1080}
   M: 2
-  a: 0
+  a: 1.5
   StepSize: 0.2
   preciseSteps: 0.01
   Rsoi: 200
@@ -263,18 +263,19 @@ MonoBehaviour:
   fieldCS: {fileID: 7200000, guid: 42507ae1c1c0af24d89422262e079d3d, type: 3}
   DeepStarMap: {fileID: 2800000, guid: 0cf94cfc70d094a40b10be3629fbe450, type: 3}
   RedShiftMul: 1
-  Rout: 142.6
+  Rout: 60
   Sigma_zero: 0.4
   RenderDisk: 1
-  tileSize: 500
+  tileSize: 1024
   isRenderingVideo: 0
   frame: 0
-  FrameCount: 864
+  FrameCount: 600
   frameRate: 60
   saveFrames: 0
   speed: 5
   useDelFrame: 1
   SpectrumOffset: 0
+  RoutWidthPercent: 40
 --- !u!1 &1209598649
 GameObject:
   m_ObjectHideFlags: 0

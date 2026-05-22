@@ -455,7 +455,9 @@ MonoBehaviour:
   Rout: 70
   Sigma_zero: 0.3
   RenderDisk: 1
-  tileSize: 500
+  tileSize: 512
+  RoutWidthPercent: 20
+  SpectrumOffset: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

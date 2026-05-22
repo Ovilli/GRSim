@@ -55,6 +55,9 @@ public class TesselatedGPURender : MonoBehaviour
     float T_end;
     bool finishedRenderingLastFrame = false;
 
+    public float RoutWidthPercent = 20f;
+    public float SpectrumOffset = 0f;
+
     void Start()
     {
         diag = Matrix4x4.identity;
@@ -100,10 +103,12 @@ public class TesselatedGPURender : MonoBehaviour
         fieldCS.SetBool("RenderDisk", RenderDisk);
         fieldCS.SetInt("OffsetX", OffsetX);
         fieldCS.SetInt("OffsetY", OffsetY);
+        fieldCS.SetFloat("SpectrumOffset", SpectrumOffset);
+        fieldCS.SetFloat("Rout_width", RoutWidthPercent / 100f * Rout);
         fieldCS.Dispatch(
             kernel,
-            Mathf.CeilToInt(CurrectTileSizeX / 8f),
-            Mathf.CeilToInt(CurrectTileSizeY / 8f),
+            Mathf.CeilToInt(CurrectTileSizeX / 128f),
+            Mathf.CeilToInt(CurrectTileSizeY / 1f),
             1
         );
         SetTile(OffsetX, OffsetY, CurrectTileSizeX, CurrectTileSizeY, tile);
@@ -220,7 +225,7 @@ public class TesselatedGPURender : MonoBehaviour
                 MetricTensor[mu, nu] = diag[mu, nu] + 2 * H * l[mu] * l[nu];
     }
 
-    Vector4 CalcL(Vector4 pos, float r, float a)
+    Vector4 CalcL(Vector4 pos, float r, float a) // null vector field, see https://en.wikipedia.org/wiki/Kerr_metric#Kerr%E2%80%93Schild_coordinates (referenced as k)
     {
         return new Vector4(
             -1,
@@ -229,12 +234,12 @@ public class TesselatedGPURender : MonoBehaviour
             pos.w / r);
     }
 
-    float CalcH(float r, float z, float M, float a)
+    float CalcH(float r, float z, float M, float a) // strenght of space-time curvature
     {
         return (M * r * r * r) / (r * r * r * r + a * a * z * z);
     }
 
-    public Matrix4x4 localTetrad(Vector4 pos)
+    public Matrix4x4 localTetrad(Vector4 pos) //took about 2 weeks and 4 different approaches to get this right
     {
         Vector4 u = new Vector4(1f / Mathf.Sqrt(Mathf.Abs(-MetricTensorAtCam[0, 0])), 0, 0, 0);
         Vector4 v1 = new Vector4(0, 1, 0, 0);
@@ -337,7 +342,7 @@ public class TesselatedGPURender : MonoBehaviour
         return Risco;
     }
 
-    public static void SaveRenderTextureToPNG(Texture2D tex, string path)
+    public static void SaveRenderTextureToPNG(Texture2D tex, string path) //by ChatGPT
     {
         RenderTexture previous = RenderTexture.active;
 

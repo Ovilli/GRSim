@@ -126,8 +126,8 @@ public class VideoRunner : MonoBehaviour
         fieldCS.SetFloat("Rout_width", RoutWidthPercent / 100f * Rout);
         fieldCS.Dispatch(
             kernel,
-            Mathf.CeilToInt(CurrectTileSizeX / 8f),
-            Mathf.CeilToInt(CurrectTileSizeY / 8f),
+            Mathf.CeilToInt(CurrectTileSizeX / 128f),
+            Mathf.CeilToInt(CurrectTileSizeY / 1f),
             1
         );
         SetTile(OffsetX, OffsetY, CurrectTileSizeX, CurrectTileSizeY, tile);
@@ -405,12 +405,17 @@ public class VideoRunner : MonoBehaviour
         Matrix4x4 Rtest = Matrix4x4.Rotate(Quaternion.Euler(Angles));
         Matrix4x4 R = Matrix4x4.zero;
         for (int i = 1; i < 4; i++)
+        {
             for (int j = 1; j < 4; j++)
+            {
                 R[i, j] = Rtest[i - 1, j - 1];
+            }
+        }
         R[0, 0] = 1; // do not disturb time
 
         Matrix4x4 e = new Matrix4x4();
         for (int mu = 0; mu < 4; mu++)
+        {
             for (int aa = 0; aa < 4; aa++)
             {
                 float sum = 0;
@@ -418,6 +423,7 @@ public class VideoRunner : MonoBehaviour
                     sum += Tetrad[mu, b] * R[b, aa];
                 e[mu, aa] = sum;
             }
+        }
         return e;
     }
 
@@ -434,7 +440,7 @@ public class VideoRunner : MonoBehaviour
 
     #region Export Texture
 
-    public static void SaveRenderTextureToPNG(Texture2D tex, string path)
+    public static void SaveRenderTextureToPNG(Texture2D tex, string path) // by ChatGPT
     {
         RenderTexture previous = RenderTexture.active;
 

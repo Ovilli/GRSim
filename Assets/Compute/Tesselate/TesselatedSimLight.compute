@@ -553,7 +553,7 @@ float4 TraceRay(LightRay start)
 
 // ---- kernel ---------------------------------------------------------------
 
-[numthreads(8, 8, 1)] //depends on computer whats best
+[numthreads(128, 1, 1)] //depends on computer whats best
 void CSMain(uint3 id : SV_DispatchThreadID) 
 {
     CurrentColor = float4(0, 0, 0, 0);
