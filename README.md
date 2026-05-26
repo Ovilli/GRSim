@@ -1,26 +1,42 @@
-<img width="1920" height="1080" alt="RenderedImage24" src="https://github.com/user-attachments/assets/0a9f0bbc-5366-4c69-b80a-f59cb4e2bb6c" />
-<img width="3840" height="2160" alt="RenderedImage1" src="https://github.com/user-attachments/assets/7594e694-5aa9-4c6d-ad3b-e07a1dbf75df" />
-
-## Videos
-https://youtu.be/kiZFMop2YXI
-https://youtu.be/J-dq-xoaSqQ
-https://youtu.be/kqanx4Q8beg
-https://youtu.be/0EBSjOWegvo
-
 # GRSim
 
-Image of simulated H (deviation from Minkowski Metric)
-|               |               |
-| ------------- | ------------- |
-|  <img width="721" height="736" alt="Screenshot 2026-01-29 163430" src="https://github.com/user-attachments/assets/0c52a7d0-55c6-4be6-a808-8b68ca1f0fde" /> | <img width="713" height="728" alt="Screenshot 2026-01-29 221226" src="https://github.com/user-attachments/assets/f42524e3-bf64-479a-bad5-7953b826e040" />
- |
+> Visualising deviations from the Minkowski metric in Kerr spacetime.
 
-###### (500x500), M = 80, a = 60(wayyy to much), z = 0(obvious), Rim = 700(singularity infinitly thin, makes sing bigger),
-###### (500x500), M = 8, a = 4.5, z = 0, Rim = 300 (more realistic)
-<!-- Yes, my only Markdown skills are spamming #, and I googled how to do "hidden Text" in Md for this... //... wait what? I think copilot auto commit name stuff just gave me away, the commit message for this will be funny --> 
-#### Key:
-* Darker: Less deviation
-* Lighter: More deviation
-* Red: Ring Singularity
-* Blue: Ergosphere
-* Lila/ later Pink: Non Singularity that works as a singularity when working with H, need to switch to Kretschmann Scalar for this to be no singular. Very interesting stuff happening here in reality
+<img width="1920" height="1080" alt="Render 1" src="https://github.com/user-attachments/assets/0a9f0bbc-5366-4c69-b80a-f59cb4e2bb6c" />
+
+<img width="3840" height="2160" alt="Render 2" src="https://github.com/user-attachments/assets/7594e694-5aa9-4c6d-ad3b-e07a1dbf75df" />
+
+## Videos
+
+[![](https://img.youtube.com/vi/kiZFMop2YXI/0.jpg)](https://youtu.be/kiZFMop2YXI)
+[![](https://img.youtube.com/vi/J-dq-xoaSqQ/0.jpg)](https://youtu.be/J-dq-xoaSqQ)
+[![](https://img.youtube.com/vi/kqanx4Q8beg/0.jpg)](https://youtu.be/kqanx4Q8beg)
+[![](https://img.youtube.com/vi/0EBSjOWegvo/0.jpg)](https://youtu.be/0EBSjOWegvo)
+
+## Simulation Output
+
+Simulated H — deviation from the Minkowski metric.
+
+| (500x500), M = 80, a = 60, z = 0, Rim = 700 | (500x500), M = 8, a = 4.5, z = 0, Rim = 300 |
+| ------------- | ------------- |
+| <img width="721" height="736" src="https://github.com/user-attachments/assets/0c52a7d0-55c6-4be6-a808-8b68ca1f0fde" /> | <img width="713" height="728" src="https://github.com/user-attachments/assets/f42524e3-bf64-479a-bad5-7953b826e040" /> |
+| Extreme spin — unrealistic, a = 60 is far beyond the Kerr bound | More physically reasonable parameters |
+
+## Colour Key
+
+| Colour | Meaning |
+|--------|---------|
+| Dark   | Less deviation from flat spacetime |
+| Light  | More deviation |
+| Red    | Ring singularity |
+| Blue   | Ergosphere |
+| Purple | Non-singular coordinate point behaving as a singularity under H — use the Kretschmann scalar to confirm it is not a true singularity |
+
+## Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `M`   | Mass |
+| `a`   | Spin (Kerr parameter) |
+| `z`   | Axial slice |
+| `Rim` | Singularity ring radius — higher values make the ring appear larger |
